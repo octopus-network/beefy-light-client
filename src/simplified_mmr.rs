@@ -32,7 +32,7 @@ fn merkle_root(
 	current_hash
 }
 
-pub fn verify_proof(root: H256, leaf_node_hash: H256, proof: MerkleProof) -> bool {
+pub fn verify_mmr_proof(root: H256, leaf_node_hash: H256, proof: MerkleProof) -> bool {
 	if proof.merkle_proof_items.len() < 64 {
 		root == merkle_root(
 			leaf_node_hash,
@@ -77,7 +77,7 @@ mod tests {
 			merkle_proof_order_bit_field: 0,
 		};
 
-		assert!(verify_proof(mmr_root, leaf_node_hash, leaf_proof));
+		assert!(verify_mmr_proof(mmr_root, leaf_node_hash, leaf_proof));
 	}
 
 	#[test]
@@ -111,6 +111,6 @@ mod tests {
 			merkle_proof_order_bit_field: 8,
 		};
 
-		assert!(verify_proof(mmr_root, leaf_node_hash, leaf_proof));
+		assert!(verify_mmr_proof(mmr_root, leaf_node_hash, leaf_proof));
 	}
 }

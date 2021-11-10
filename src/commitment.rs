@@ -5,6 +5,7 @@ use primitive_types::H256;
 
 pub type Signature = Vec<u8>;
 
+#[derive(Debug)]
 pub struct Commitment {
 	pub payload: H256,
 	pub block_number: u64,

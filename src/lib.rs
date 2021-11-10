@@ -1,18 +1,18 @@
+use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
+use commitment::{Commitment, Signature, SignedCommitment};
 use primitive_types::H256;
+use simplified_mmr::{verify_mmr_proof, MerkleProof};
+use traits::{ValidatorRegistry, ECDSA};
+use validator_set::{BeefyNextAuthoritySet, Public};
 
-pub mod bitfield;
+use hex_literal::hex;
+
 pub mod commitment;
 pub mod keccak256;
 pub mod mmr;
 pub mod simplified_mmr;
 pub mod traits;
 pub mod validator_set;
-
-use beefy_merkle_tree::{merkle_root, Keccak256};
-use commitment::{Commitment, Signature, SignedCommitment};
-use simplified_mmr::{verify_proof, MerkleProof};
-use traits::{ValidatorRegistry, ECDSA};
-use validator_set::{BeefyNextAuthoritySet, Public};
 
 /// A marker struct for validator set merkle tree.
 #[derive(Debug)]
@@ -123,19 +123,22 @@ impl LightClient {
 		Ok(())
 	}
 
-	pub fn verify_solochain_message() {}
-
-	pub fn verify_parachain_message() {}
-
 	fn verify_commitment(&self, signed_commitment: SignedCommitment) -> Result<Commitment, Error> {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
-		let mut expected_validator_set = vec![];
+		let commitment_hash = commitment.hash();
+		println!("commitment_hash: {:?}", commitment_hash);
+		let pk = hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1");
+		let pk = libsecp256k1::PublicKey::parse_slice(&pk[..], None).unwrap();
+		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..]).unwrap();
 		for signature in signatures.into_iter() {
 			if let Some(signature) = signature {
+				let sig = libsecp256k1::Signature::parse_standard_slice(&signature[..]).unwrap();
+				let res = libsecp256k1::verify(&msg, &sig, &pk);
+				println!("verify result: {:?}", res);
 				let result = self.recover(commitment.hash(), signature);
 				match result {
 					Ok(signer) => {
-						expected_validator_set.push(signer);
+						println!("signer: {:?}", signer);
 					}
 					Err(_) => {
 						return Err(Error::InvalidSignature);
@@ -144,7 +147,6 @@ impl LightClient {
 			}
 		}
 
-		// TODO: check if expected_validator_set equals validator_set, or is a minimal subset of validator_set
 		Ok(commitment)
 	}
 
@@ -154,18 +156,24 @@ impl LightClient {
 		leaf_hash: H256,
 		proof: MerkleProof,
 	) -> Result<(), Error> {
-		let result = verify_proof(root_hash, leaf_hash, proof);
+		let result = verify_mmr_proof(root_hash, leaf_hash, proof);
 		if !result {
 			return Err(Error::InvalidMmrProof);
 		}
 		Ok(())
 	}
+
+	pub fn verify_solochain_message() {}
+
+	pub fn verify_parachain_message() {}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{Commitment, SignedCommitment};
 	use hex_literal::hex;
+	use std::str::FromStr;
 
 	#[test]
 	fn it_works() {
@@ -173,6 +181,19 @@ mod tests {
 			vec![hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1").into()];
 		let lc = new(public_keys);
 		println!("{:?}", lc);
+
+		let commitment = Commitment {
+			payload: H256::from_str(
+				"0x700a2fb21ba1ec2cdf72bb621846a4cc8628ed8e3ed5bb299f9e36406776f84a",
+			)
+			.unwrap(),
+			block_number: 1369,
+			validator_set_id: 0,
+		};
+		let signed_commitment = SignedCommitment { commitment, signatures: vec![Some(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af733").into())] };
+		let res = lc.verify_commitment(signed_commitment).unwrap();
+		println!("{:?}", res);
+
 		assert_eq!(2 + 2, 4);
 	}
 }
