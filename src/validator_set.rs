@@ -1,36 +1,29 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+use beefy_merkle_tree::Hash;
+use codec::Encode;
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+/// A typedef for validator set id.
+pub type ValidatorSetId = u64;
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+pub type Public = [u8; 33];
 
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Public(pub u8);
-
-impl From<u8> for Public {
-    fn from(public: u8) -> Self {
-        Self(public)
-    }
-}
-
-#[derive(Debug)]
-pub enum Signature {
-    ValidFor(Public),
-    Invalid,
-}
-
-impl Signature {
-    pub fn is_valid_for(&self, public: &Public) -> bool {
-        matches!(self, Self::ValidFor(ref p) if p == public)
-    }
+#[derive(Debug, Default, Encode)]
+pub struct BeefyNextAuthoritySet {
+	/// Id of the next set.
+	///
+	/// Id is required to correlate BEEFY signed commitments with the validator set.
+	/// Light Client can easily verify that the commitment witness it is getting is
+	/// produced by the latest validator set.
+	pub id: ValidatorSetId,
+	/// Number of validators in the set.
+	///
+	/// Some BEEFY Light Clients may use an interactive protocol to verify only subset
+	/// of signatures. We put set length here, so that these clients can verify the minimal
+	/// number of required signatures.
+	pub len: u32,
+	/// Merkle Root Hash build from BEEFY AuthorityIds.
+	///
+	/// This is used by Light Clients to confirm that the commitments are signed by the correct
+	/// validator set. Light Clients using interactive protocol, might verify only subset of
+	/// signatures, hence don't require the full list here (will receive inclusion proofs).
+	pub root: Hash,
 }

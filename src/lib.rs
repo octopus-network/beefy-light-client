@@ -1,22 +1,16 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+#[cfg(not(feature = "std"))]
+use core::result;
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+use beefy_merkle_tree::{merkle_root, verify_proof, Hash, Keccak256, MerkleProof};
+use commitment::{Commitment, SignedCommitment};
+use mmr::MmrLeaf;
+use validator_set::{BeefyNextAuthoritySet, Public};
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-use beefy_primitives::{self as bp, ValidatorSetId};
-
-pub mod merkle_tree;
+pub mod commitment;
+pub mod ecdsa;
+pub mod mmr;
+pub mod simplified_mmr;
+pub mod traits;
 pub mod validator_set;
 
 /// A marker struct for validator set merkle tree.
@@ -28,233 +22,184 @@ pub struct ValidatorSetTree;
 pub struct Mmr;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Payload {
-    pub next_validator_set: Option<merkle_tree::Root<ValidatorSetTree>>,
-    pub mmr: merkle_tree::Root<Mmr>,
-}
-
-impl Payload {
-    pub fn new(root: u32) -> Self {
-        Self {
-            next_validator_set: None,
-            mmr: root.into(),
-        }
-    }
-}
-
-pub type BlockNumber = u64;
-pub type Commitment = bp::Commitment<BlockNumber, Payload>;
-pub type SignedCommitment = bp::SignedCommitment<BlockNumber, Payload, validator_set::Signature>;
-
-#[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    /// [Commitment] can't be imported, cause it's signed by either past or future validator set.
-    InvalidValidatorSetId {
-        expected: ValidatorSetId,
-        got: ValidatorSetId,
-    },
-    /// [Commitment] can't be imported, cause it's a set transition block and the proof is missing.
-    InvalidValidatorSetProof,
-    /// [Commitment] is not useful, cause it's made for an older block than we know of.
-    ///
-    /// In practice it's okay for the light client to import such commitments (if the validator set
-    /// matches), but it doesn't provide any more value, since the payload is meant to be
-    /// cumulative.
-    /// It might be useful however, if we want to verify proofs that were generated against this
-    /// specific block number.
-    OldBlock {
-        /// Best block currently known by the light client.
-        best_known: BlockNumber,
-        /// Block in the commitment.
-        got: BlockNumber,
-    },
-    /// There are too many signatures in the commitment - more than validators.
-    InvalidNumberOfSignatures {
-        /// Number of validators in the set.
-        expected: usize,
-        /// Numbers of signatures in the commitment.
-        got: usize,
-    },
-    /// [SignedCommitment] doesn't have enough valid signatures.
-    NotEnoughValidSignatures {
-        expected: usize,
-        got: usize,
-        valid: Option<usize>,
-    },
-    /// Next validator set has not been provided by any of the previous commitments.
-    MissingNextValidatorSetData,
-    /// Couldn't verify the proof against MMR root of the latest commitment.
-    InvalidMmrProof,
+	/// [Commitment] can't be imported, cause it's signed by either past or future validator set.
+	// InvalidValidatorSetId { expected: ValidatorSetId, got: ValidatorSetId },
+	/// [Commitment] can't be imported, cause it's a set transition block and the proof is missing.
+	InvalidValidatorProof,
+	/// [Commitment] is not useful, cause it's made for an older block than we know of.
+	///
+	/// In practice it's okay for the light client to import such commitments (if the validator set
+	/// matches), but it doesn't provide any more value, since the payload is meant to be
+	/// cumulative.
+	/// It might be useful however, if we want to verify proofs that were generated against this
+	/// specific block number.
+	// OldBlock {
+	//     /// Best block currently known by the light client.
+	//     best_known: BlockNumber,
+	//     /// Block in the commitment.
+	//     got: BlockNumber,
+	// },
+	/// There are too many signatures in the commitment - more than validators.
+	InvalidNumberOfSignatures {
+		/// Number of validators in the set.
+		expected: usize,
+		/// Numbers of signatures in the commitment.
+		got: usize,
+	},
+	/// [SignedCommitment] doesn't have enough valid signatures.
+	NotEnoughValidSignatures { expected: usize, got: usize, valid: Option<usize> },
+	/// Next validator set has not been provided by any of the previous commitments.
+	MissingNextValidatorSetData,
+	/// Couldn't verify the proof against MMR root of the latest commitment.
+	InvalidMmrProof,
+	///
+	InvalidSignature,
 }
 
-type ValidatorSet = (ValidatorSetId, Vec<validator_set::Public>);
-
+// $ subkey inspect --scheme ecdsa //Alice
+// Secret Key URI `//Alice` is account:
+//   Secret seed:       0xcb6df9de1efca7a3998a8ead4e02159d5fa99c3e0d4fd6432667390bb4726854
+//   Public key (hex):  0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1
+//   Public key (SS58): KW39r9CJjAVzmkf9zQ4YDb2hqfAVGdRqn53eRqyruqpxAP5YL
+//   Account ID:        0x01e552298e47454041ea31273b4b630c64c104e4514aa3643490b8aaca9cf8ed
+//   SS58 Address:      5C7C2Z5sWbytvHpuLTvzKunnnRwQxft1jiqrLD5rhucQ5S9X
+//
+// justifications.commitment.payload:  0x700a2fb21ba1ec2cdf72bb621846a4cc8628ed8e3ed5bb299f9e36406776f84a
+// justifications.commitment.blockNumber:  1369
+// justifications.commitment.validatorSetId:  0
+// justifications.commitment.hash:  0xd96c73e1a602b757fce3ff4509b57cda4f4989f854dac6753d8d3329049e93e8
+// justifications.signatures:  [0x3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af733]
+//
+// justifications.commitment.payload:  0x86b1679e44a6a525748707bd2d4d44700fc3a2dc9e152a8fd414b4e9d17b07b5
+// justifications.commitment.blockNumber:  1377
+// justifications.commitment.validatorSetId:  0
+// justifications.commitment.hash:  0x86262696075aeb15493d428a3353c3b60616c8380c0bb4966211a1b92a58634f
+// justifications.signatures:  [0xcc73f69bf58fbe1720c59a5f1a804a869012ed9f4e86637cfb85b0d126c86f916f1e7a3db98f2608e4968544fdb0bceb55b380d8c9fd9638ea0c420d47b6001f]
+//
+// justifications.commitment.payload:  0x3e793b247a32500619702d4d4c6ad63466cc06189904bccd428c17ac2e2b08e2
+// justifications.commitment.blockNumber:  1385
+// justifications.commitment.validatorSetId:  0
+// justifications.commitment.hash:  0x98d3357fa89e5c48f963d76846a526cbd6c40dbd67124b117065af872a1d3ef1
+// justifications.signatures:  [0xf994b9bf1410de7988806738ea7c046bbf964cb76d1e07104fd0d5a67925d76558b5cd27e5fc6d566940943f488692fd7bb54233d7e89d34d53dfa16a4b9fb63]
+#[derive(Debug, Default)]
 pub struct LightClient {
-    validator_set: ValidatorSet,
-    next_validator_set: Option<merkle_tree::Root<ValidatorSetTree>>,
-    last_commitment: Option<Commitment>,
+	mmr_root: Hash,
+	validator_set: BeefyNextAuthoritySet,
+}
+
+// Initialize light client using the BeefyId of the initial validator set.
+pub fn new(initial_public_keys: Vec<Public>) -> LightClient {
+	LightClient {
+		mmr_root: Hash::default(),
+		validator_set: BeefyNextAuthoritySet {
+			id: 0,
+			len: initial_public_keys.len() as u32,
+			root: merkle_root::<Keccak256, _, _>(initial_public_keys),
+		},
+	}
 }
 
 impl LightClient {
-    pub fn import(&mut self, signed: SignedCommitment) -> Result<(), Error> {
-        // Make sure it's not a set transition block (see [import_set_transition]).
-        if signed.commitment.validator_set_id != self.validator_set.0 {
-            return Err(Error::InvalidValidatorSetId {
-                expected: self.validator_set.0,
-                got: signed.commitment.validator_set_id,
-            });
-        }
+	// Import a signed commitment and update the state of light client.
+	pub fn update_state(
+		&mut self,
+		signed_commitment: SignedCommitment,
+		validator_proof: Vec<MerkleProof<&Public>>,
+		mmr_leaf: MmrLeaf,
+		mmr_proof: simplified_mmr::MerkleProof,
+	) -> Result<(), Error> {
+		// TODO: check length
+		for proof in validator_proof {
+			if !verify_proof::<Keccak256, _, _>(
+				&self.validator_set.root,
+				proof.proof,
+				proof.number_of_leaves,
+				proof.leaf_index,
+				proof.leaf,
+			) {
+				return Err(Error::InvalidValidatorProof);
+			}
+		}
+		let commitment = self.verify_commitment(signed_commitment)?;
+		self.verify_mmr_leaf(commitment.payload, &mmr_leaf, mmr_proof)?;
 
-        let commitment = self.validate_commitment(signed, &self.validator_set)?;
-        if let Some(ref next_validator_set) = commitment.payload.next_validator_set {
-            self.next_validator_set = Some(next_validator_set.clone());
-        }
-        self.last_commitment = Some(commitment);
+		// update mmr_root
+		self.mmr_root = commitment.payload;
 
-        Ok(())
-    }
+		// update validator_set
+		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
+			self.validator_set = mmr_leaf.beefy_next_authority_set;
+		}
+		Ok(())
+	}
 
-    pub fn import_set_transition(
-        &mut self,
-        signed: SignedCommitment,
-        validator_set_proof: merkle_tree::Proof<ValidatorSetTree, Vec<validator_set::Public>>,
-    ) -> Result<(), Error> {
-        // Make sure it is a set transition block (see [import]).
-        if signed.commitment.validator_set_id != self.validator_set.0 + 1 {
-            return Err(Error::InvalidValidatorSetId {
-                expected: self.validator_set.0 + 1,
-                got: signed.commitment.validator_set_id,
-            });
-        }
+	pub fn verify_solochain_message(&self) -> Result<(), Error> {
+		Ok(())
+	}
 
-        // verify validator set proof
-        let validator_set_root = self
-            .next_validator_set
-            .as_ref()
-            .ok_or(Error::MissingNextValidatorSetData)?;
-        if !validator_set_proof.is_valid(validator_set_root) {
-            return Err(Error::InvalidValidatorSetProof);
-        }
-        let set = validator_set_proof.into_data();
-        let new_id = self.validator_set.0 + 1;
-        let new_validator_set = (new_id, set);
+	pub fn verify_parachain_message(&self) -> Result<(), Error> {
+		Ok(())
+	}
 
-        let commitment = self.validate_commitment(signed, &new_validator_set)?;
+	fn verify_commitment(&self, signed_commitment: SignedCommitment) -> Result<Commitment, Error> {
+		let SignedCommitment { commitment, signatures } = signed_commitment;
+		let commitment_hash = commitment.hash();
+		println!("commitment_hash: {:?}", commitment_hash);
+		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..]).unwrap();
+		for signature in signatures.into_iter() {
+			if let Some(signature) = signature {
+				let sig = libsecp256k1::Signature::parse_standard_slice(&signature[..]).unwrap();
+				let res =
+					libsecp256k1::recover(&msg, &sig, &libsecp256k1::RecoveryId::parse(0).unwrap())
+						.unwrap();
+				println!("verify result: {:?}", res.serialize_compressed());
+			}
+		}
 
-        self.validator_set = new_validator_set;
-        self.next_validator_set = commitment.payload.next_validator_set.clone();
-        self.last_commitment = Some(commitment);
+		Ok(commitment)
+	}
 
-        Ok(())
-    }
-
-    pub fn verify_proof<R>(&self, proof: merkle_tree::Proof<Mmr, R>) -> Result<R, Error> {
-        if proof.is_valid(&self.last_payload().mmr) {
-            Ok(proof.into_data())
-        } else {
-            Err(Error::InvalidMmrProof)
-        }
-    }
-
-    pub fn validator_set(&self) -> &ValidatorSet {
-        &self.validator_set
-    }
-
-    pub fn last_commitment(&self) -> Option<&Commitment> {
-        self.last_commitment.as_ref()
-    }
-
-    pub fn last_payload(&self) -> &Payload {
-        &self
-            .last_commitment()
-            .expect("Genesis doesn't contain commitment.")
-            .payload
-    }
-
-    fn validate_commitment(
-        &self,
-        commitment: SignedCommitment,
-        validator_set: &ValidatorSet,
-    ) -> Result<Commitment, Error> {
-        let no_of_non_empty_signatures = commitment.no_of_signatures();
-        let SignedCommitment {
-            commitment,
-            signatures,
-        } = commitment;
-        // Make sure it's signed by the current validator set we know of.
-        if validator_set.0 != commitment.validator_set_id {
-            return Err(Error::InvalidValidatorSetId {
-                expected: validator_set.0,
-                got: commitment.validator_set_id,
-            });
-        }
-
-        // Make sure it's not worse than what we already have.
-        let best_block = self.last_commitment().map(|c| c.block_number).unwrap_or(0);
-        if commitment.block_number <= best_block {
-            return Err(Error::OldBlock {
-                best_known: best_block,
-                got: commitment.block_number,
-            });
-        }
-
-        // check number of signatures
-        let validator_set_count = validator_set.1.len();
-        if signatures.len() != validator_set_count {
-            return Err(Error::InvalidNumberOfSignatures {
-                expected: validator_set_count,
-                got: signatures.len(),
-            });
-        }
-
-        // check the validity of signatures
-        let minimal_number_of_signatures = Self::minimal_number_of_signatures(validator_set);
-        if no_of_non_empty_signatures < minimal_number_of_signatures {
-            return Err(Error::NotEnoughValidSignatures {
-                expected: minimal_number_of_signatures,
-                got: no_of_non_empty_signatures,
-                valid: None,
-            });
-        }
-
-        let mut valid = 0;
-        for (signature, public) in signatures.into_iter().zip(validator_set.1.iter()) {
-            match signature {
-                Some(signature) if signature.is_valid_for(&public) => {
-                    valid += 1;
-                }
-                _ => {}
-            }
-        }
-
-        if valid < minimal_number_of_signatures {
-            return Err(Error::NotEnoughValidSignatures {
-                expected: minimal_number_of_signatures,
-                got: no_of_non_empty_signatures,
-                valid: Some(valid),
-            });
-        }
-
-        Ok(commitment)
-    }
-
-    fn minimal_number_of_signatures(set: &ValidatorSet) -> usize {
-        2 * set.1.len() / 3 + 1
-    }
-}
-
-pub fn new() -> LightClient {
-    LightClient {
-        validator_set: (0, vec![validator_set::Public(0)]),
-        next_validator_set: None,
-        last_commitment: None,
-    }
+	fn verify_mmr_leaf(
+		&self,
+		root_hash: Hash,
+		leaf: &MmrLeaf,
+		proof: simplified_mmr::MerkleProof,
+	) -> Result<(), Error> {
+		let leaf_hash = leaf.hash();
+		let result = simplified_mmr::verify_proof(root_hash, leaf_hash, proof);
+		if !result {
+			return Err(Error::InvalidMmrProof);
+		}
+		Ok(())
+	}
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+	use super::*;
+	use crate::{Commitment, SignedCommitment};
+	use hex_literal::hex;
+
+	#[test]
+	fn it_works() {
+		let public_keys =
+			vec![hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1").into()];
+		let lc = new(public_keys);
+		println!("{:?}", lc);
+
+		let commitment = Commitment {
+			payload: hex!("700a2fb21ba1ec2cdf72bb621846a4cc8628ed8e3ed5bb299f9e36406776f84a")
+				.into(),
+			block_number: 1369,
+			validator_set_id: 0,
+		};
+		let signed_commitment = SignedCommitment { commitment, signatures: vec![Some(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af733").into())] };
+		let res = lc.verify_commitment(signed_commitment).unwrap();
+		println!("{:?}", res);
+
+		assert_eq!(2 + 2, 4);
+		// let pk = hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1");
+		// let pk = libsecp256k1::PublicKey::parse_slice(&pk[..], None).unwrap();
+	}
 }
