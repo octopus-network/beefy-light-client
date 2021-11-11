@@ -1,7 +1,9 @@
 use beefy_merkle_tree::{Hash, Keccak256};
 use byteorder::{ByteOrder, LittleEndian};
 
-pub type Signature = Vec<u8>;
+/// A signature (a 512-bit value, plus 8 bits for recovery ID).
+#[derive(Debug)]
+pub struct Signature(pub [u8; 65]);
 
 #[derive(Debug)]
 pub struct Commitment {
