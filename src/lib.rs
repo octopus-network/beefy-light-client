@@ -1,14 +1,13 @@
-use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
-use commitment::{Commitment, Signature, SignedCommitment};
-use primitive_types::H256;
-use simplified_mmr::{verify_mmr_proof, MerkleProof};
-use traits::{ValidatorRegistry, ECDSA};
+#[cfg(not(feature = "std"))]
+use core::result;
+
+use beefy_merkle_tree::{merkle_root, verify_proof, Hash, Keccak256, MerkleProof};
+use commitment::{Commitment, SignedCommitment};
+use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, Public};
 
-use hex_literal::hex;
-
 pub mod commitment;
-pub mod keccak256;
+pub mod ecdsa;
 pub mod mmr;
 pub mod simplified_mmr;
 pub mod traits;
@@ -27,7 +26,7 @@ pub enum Error {
 	/// [Commitment] can't be imported, cause it's signed by either past or future validator set.
 	// InvalidValidatorSetId { expected: ValidatorSetId, got: ValidatorSetId },
 	/// [Commitment] can't be imported, cause it's a set transition block and the proof is missing.
-	InvalidValidatorSetProof,
+	InvalidValidatorProof,
 	/// [Commitment] is not useful, cause it's made for an older block than we know of.
 	///
 	/// In practice it's okay for the light client to import such commitments (if the validator set
@@ -83,17 +82,16 @@ pub enum Error {
 // justifications.commitment.validatorSetId:  0
 // justifications.commitment.hash:  0x98d3357fa89e5c48f963d76846a526cbd6c40dbd67124b117065af872a1d3ef1
 // justifications.signatures:  [0xf994b9bf1410de7988806738ea7c046bbf964cb76d1e07104fd0d5a67925d76558b5cd27e5fc6d566940943f488692fd7bb54233d7e89d34d53dfa16a4b9fb63]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LightClient {
-	mmr_root: H256,
+	mmr_root: Hash,
 	validator_set: BeefyNextAuthoritySet,
-	// next_validator_set: Option<merkle_tree::Root<ValidatorSetTree>>,
-	// last_commitment: Option<Commitment>,
 }
 
+// Initialize light client using the BeefyId of the initial validator set.
 pub fn new(initial_public_keys: Vec<Public>) -> LightClient {
 	LightClient {
-		mmr_root: H256::default(),
+		mmr_root: Hash::default(),
 		validator_set: BeefyNextAuthoritySet {
 			id: 0,
 			len: initial_public_keys.len() as u32,
@@ -102,24 +100,45 @@ pub fn new(initial_public_keys: Vec<Public>) -> LightClient {
 	}
 }
 
-impl ValidatorRegistry for LightClient {}
-impl ECDSA for LightClient {
-	fn recover(&self, hash: H256, signature: Signature) -> Result<H256, Error> {
-		// TODO
-		Ok(H256::default())
-	}
-}
-
 impl LightClient {
+	// Import a signed commitment and update the state of light client.
 	pub fn update_state(
 		&mut self,
 		signed_commitment: SignedCommitment,
-		leaf_hash: H256,
-		proof: MerkleProof,
+		validator_proof: Vec<MerkleProof<&Public>>,
+		mmr_leaf: MmrLeaf,
+		mmr_proof: simplified_mmr::MerkleProof,
 	) -> Result<(), Error> {
+		// TODO: check length
+		for proof in validator_proof {
+			if !verify_proof::<Keccak256, _, _>(
+				&self.validator_set.root,
+				proof.proof,
+				proof.number_of_leaves,
+				proof.leaf_index,
+				proof.leaf,
+			) {
+				return Err(Error::InvalidValidatorProof);
+			}
+		}
 		let commitment = self.verify_commitment(signed_commitment)?;
-		self.verify_leaf(commitment.payload, leaf_hash, proof)?;
+		self.verify_mmr_leaf(commitment.payload, &mmr_leaf, mmr_proof)?;
+
+		// update mmr_root
 		self.mmr_root = commitment.payload;
+
+		// update validator_set
+		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
+			self.validator_set = mmr_leaf.beefy_next_authority_set;
+		}
+		Ok(())
+	}
+
+	pub fn verify_solochain_message(&self) -> Result<(), Error> {
+		Ok(())
+	}
+
+	pub fn verify_parachain_message(&self) -> Result<(), Error> {
 		Ok(())
 	}
 
@@ -127,45 +146,33 @@ impl LightClient {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let commitment_hash = commitment.hash();
 		println!("commitment_hash: {:?}", commitment_hash);
-		let pk = hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1");
-		let pk = libsecp256k1::PublicKey::parse_slice(&pk[..], None).unwrap();
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..]).unwrap();
 		for signature in signatures.into_iter() {
 			if let Some(signature) = signature {
 				let sig = libsecp256k1::Signature::parse_standard_slice(&signature[..]).unwrap();
-				let res = libsecp256k1::verify(&msg, &sig, &pk);
-				println!("verify result: {:?}", res);
-				let result = self.recover(commitment.hash(), signature);
-				match result {
-					Ok(signer) => {
-						println!("signer: {:?}", signer);
-					}
-					Err(_) => {
-						return Err(Error::InvalidSignature);
-					}
-				}
+				let res =
+					libsecp256k1::recover(&msg, &sig, &libsecp256k1::RecoveryId::parse(0).unwrap())
+						.unwrap();
+				println!("verify result: {:?}", res.serialize_compressed());
 			}
 		}
 
 		Ok(commitment)
 	}
 
-	fn verify_leaf(
+	fn verify_mmr_leaf(
 		&self,
-		root_hash: H256,
-		leaf_hash: H256,
-		proof: MerkleProof,
+		root_hash: Hash,
+		leaf: &MmrLeaf,
+		proof: simplified_mmr::MerkleProof,
 	) -> Result<(), Error> {
-		let result = verify_mmr_proof(root_hash, leaf_hash, proof);
+		let leaf_hash = leaf.hash();
+		let result = simplified_mmr::verify_proof(root_hash, leaf_hash, proof);
 		if !result {
 			return Err(Error::InvalidMmrProof);
 		}
 		Ok(())
 	}
-
-	pub fn verify_solochain_message() {}
-
-	pub fn verify_parachain_message() {}
 }
 
 #[cfg(test)]
@@ -173,7 +180,6 @@ mod tests {
 	use super::*;
 	use crate::{Commitment, SignedCommitment};
 	use hex_literal::hex;
-	use std::str::FromStr;
 
 	#[test]
 	fn it_works() {
@@ -183,10 +189,8 @@ mod tests {
 		println!("{:?}", lc);
 
 		let commitment = Commitment {
-			payload: H256::from_str(
-				"0x700a2fb21ba1ec2cdf72bb621846a4cc8628ed8e3ed5bb299f9e36406776f84a",
-			)
-			.unwrap(),
+			payload: hex!("700a2fb21ba1ec2cdf72bb621846a4cc8628ed8e3ed5bb299f9e36406776f84a")
+				.into(),
 			block_number: 1369,
 			validator_set_id: 0,
 		};
@@ -195,5 +199,7 @@ mod tests {
 		println!("{:?}", res);
 
 		assert_eq!(2 + 2, 4);
+		// let pk = hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1");
+		// let pk = libsecp256k1::PublicKey::parse_slice(&pk[..], None).unwrap();
 	}
 }

@@ -5,15 +5,10 @@ authors = ["Julian Sun <julian@oct.network>"]
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-primitive-types = { version = "0.9.0", default-features = false, features = ["codec"] }
-tiny-keccak = { version = "2.0.2", features = ["keccak"] }
-rand = "0.8.0"
-byteorder = "1"
 beefy-merkle-tree = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", features = ["keccak"], default-features = false }
-
+byteorder = { version = "1", default-features = false }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 libsecp256k1 = { version = "0.7.0", features = ["static-context"], default-features = false }
-hex-literal = "0.3.1"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
@@ -22,7 +17,7 @@ hex-literal = "0.3.1"
 default = ["std"]
 std = [
 	"beefy-merkle-tree/std",
+	"byteorder/std",
 	"codec/std",
 	"libsecp256k1/std",
-	"primitive-types/std",
 ]
