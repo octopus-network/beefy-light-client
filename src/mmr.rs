@@ -1,6 +1,9 @@
 use crate::BeefyNextAuthoritySet;
-use beefy_merkle_tree::{verify_proof, Hash, Keccak256, MerkleProof};
+use beefy_merkle_tree::{verify_proof, Hash, Keccak256, Leaf, MerkleProof};
 use codec::Encode;
+
+#[cfg(not(feature = "std"))]
+use core::convert::Into;
 
 #[derive(Debug, Default, Encode)]
 pub struct MmrLeafVersion(u8);
@@ -41,6 +44,23 @@ impl MmrLeaf {
 	pub fn hash(&self) -> Hash {
 		Keccak256::hash(&self.encode())
 	}
+}
+
+impl<'a> From<MmrLeaf> for Leaf<'a> {
+	fn from(v: MmrLeaf) -> Self {
+		Leaf::Hash(v.hash())
+	}
+}
+
+/// A MMR proof data for one of the leaves.
+#[derive(Debug, Default, Encode)]
+pub struct MmrLeafProof {
+	/// The index of the leaf the proof is for.
+	pub leaf_index: u64,
+	/// Number of leaves in MMR, when the proof was generated.
+	pub leaf_count: u64,
+	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
+	pub items: Vec<Hash>,
 }
 
 /// MMR nodes & size -related utilities.
@@ -97,16 +117,20 @@ pub fn leaf_index_to_mmr_size(index: u64) -> u64 {
 pub fn verify_leaf_proof(
 	root: Hash,
 	leaf: MmrLeaf,
-	proof: MerkleProof<MmrLeaf>,
+	proof: MmrLeafProof,
 ) -> Result<bool, crate::Error> {
-	let size = NodesUtils::new(proof.number_of_leaves as u64).size();
-	let leaf_position = leaf_index_to_pos(proof.leaf_index as u64);
+	let size = NodesUtils::new(proof.leaf_count).size();
+	let leaf_position = leaf_index_to_pos(proof.leaf_index);
+	let p = MerkleProof {
+		root,
+		proof: proof.items,
+		number_of_leaves: size as usize,
+		leaf_index: leaf_position as usize,
+		leaf,
+	};
 
-	// let p = mmr_lib::MerkleProof::<Node<H, L>, Hasher<H, L>>::new(
-	// 	size,
-	// 	proof.items.into_iter().map(Node::Hash).collect(),
-	// );
-	// p.verify(Node::Hash(root), vec![(leaf_position, leaf)])
-	// 	.map_err(|e| Error::Verify.log_debug(e))
+	if !verify_proof::<Keccak256, _, _>(&root, p.proof, p.number_of_leaves, p.leaf_index, p.leaf) {
+		return Err(crate::Error::InvalidMmrProof);
+	}
 	Ok(true)
 }

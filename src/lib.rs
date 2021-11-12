@@ -1,12 +1,16 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[cfg(not(feature = "std"))]
 use core::result;
 
 use beefy_merkle_tree::{merkle_root, verify_proof, Hash, Keccak256, MerkleProof};
 use commitment::{Commitment, SignedCommitment};
+use header::Header;
 use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, Public, ValidatorSetId};
 
 pub mod commitment;
+pub mod header;
 pub mod mmr;
 pub mod simplified_mmr;
 pub mod validator_set;
@@ -38,6 +42,14 @@ pub enum Error {
 	InvalidRecoveryId,
 	///
 	WrongSignature,
+	///
+	InvalidMmrLeafProof,
+	///
+	DigestNotFound,
+	///
+	DigestNotMatch,
+	///
+	HeaderHashNotMatch,
 }
 
 #[derive(Debug, Default)]
@@ -92,16 +104,30 @@ impl LightClient {
 		Ok(())
 	}
 
-	pub fn verify_solochain_message(
+	pub fn verify_solochain_messages(
 		&self,
+		messages: &[u8],
+		header: Header,
 		leaf: &MmrLeaf,
 		proof: simplified_mmr::MerkleProof,
 	) -> Result<(), Error> {
+		let header_digest = header.get_other().ok_or(Error::DigestNotFound)?;
+
+		let messages_hash = Keccak256::hash(messages);
+		if messages_hash != &header_digest[..] {
+			return Err(Error::DigestNotFound);
+		}
+
+		let header_hash = header.hash();
+		if header_hash != leaf.parent_number_and_hash.1 {
+			return Err(Error::HeaderHashNotMatch);
+		}
+
 		self.verify_mmr_leaf(self.mmr_root, leaf, proof)?;
 		Ok(())
 	}
 
-	pub fn verify_parachain_message(&self) -> Result<(), Error> {
+	pub fn verify_parachain_messages(&self) -> Result<(), Error> {
 		Ok(())
 	}
 
