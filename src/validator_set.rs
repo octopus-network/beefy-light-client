@@ -1,12 +1,12 @@
 use beefy_merkle_tree::Hash;
-use codec::Encode;
+use codec::{Decode, Encode};
 
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
 pub type Public = [u8; 33];
 
-#[derive(Debug, Default, Encode)]
+#[derive(Clone, Debug, Default, Encode, Decode)]
 pub struct BeefyNextAuthoritySet {
 	/// Id of the next set.
 	///

@@ -1,7 +1,7 @@
 use beefy_merkle_tree::{Hash, Keccak256};
-use codec::Encode;
+use codec::{Decode, Encode};
 
-#[derive(Debug, Default, Encode)]
+#[derive(Debug, Default, Encode, Decode)]
 pub struct Header {
 	/// The parent hash.
 	pub parent_hash: Hash,
@@ -28,7 +28,7 @@ impl Header {
 	}
 }
 
-#[derive(Debug, Default, Encode)]
+#[derive(Debug, Default, Encode, Decode)]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
@@ -37,7 +37,7 @@ pub struct Digest {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode)]
 pub enum DigestItem {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -83,7 +83,7 @@ pub enum DigestItem {
 	RuntimeEnvironmentUpdated,
 }
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode)]
 pub enum ChangesTrieSignal {
 	/// New changes trie configuration is enacted, starting from **next block**.
 	///
@@ -98,7 +98,7 @@ pub enum ChangesTrieSignal {
 	NewConfiguration(Option<ChangesTrieConfiguration>),
 }
 
-#[derive(Debug, Default, Encode)]
+#[derive(Debug, Default, Encode, Decode)]
 pub struct ChangesTrieConfiguration {
 	/// Interval (in blocks) at which level1-digests are created. Digests are not
 	/// created when this is less or equal to 1.
