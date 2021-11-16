@@ -7,6 +7,7 @@ use core::result;
 use std::convert::TryInto;
 
 use beefy_merkle_tree::{merkle_root, verify_proof, Hash, Keccak256, MerkleProof};
+use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
 use commitment::{Commitment, SignedCommitment};
 use header::Header;
@@ -90,7 +91,7 @@ pub struct StatePayload {
 	validator_proof: Vec<MerkleProofPayload>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
 	mmr_root: Hash,
 	validator_set: BeefyNextAuthoritySet,
