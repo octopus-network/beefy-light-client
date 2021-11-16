@@ -56,6 +56,12 @@ pub enum Error {
 	DigestNotMatch,
 	///
 	HeaderHashNotMatch,
+	///
+	CantDecodeHeader,
+	///
+	CantDecodeMmrLeaf,
+	///
+	CantDecodeMmrProof,
 }
 
 #[derive(Debug, Decode)]
@@ -82,15 +88,6 @@ pub struct MerkleProofPayload {
 pub struct StatePayload {
 	signed_commitment: SignedCommitment,
 	validator_proof: Vec<MerkleProofPayload>,
-	mmr_leaf: MmrLeaf,
-	mmr_proof: mmr::MmrLeafProof,
-}
-
-#[derive(Debug, Decode)]
-pub struct SolochainMessagesPayload {
-	header: Header,
-	leaf: MmrLeaf,
-	proof: mmr::MmrLeafProof,
 }
 
 #[derive(Debug, Default)]
@@ -119,9 +116,18 @@ pub fn new(initial_public_keys: Vec<String>) -> LightClient {
 
 impl LightClient {
 	// Import a signed commitment and update the state of light client.
-	pub fn update_state(&mut self, payload: &[u8]) -> Result<(), Error> {
+	pub fn update_state(
+		&mut self,
+		payload: &[u8],
+		mmr_leaf: &[u8],
+		mmr_proof: &[u8],
+	) -> Result<(), Error> {
 		let payload = StatePayload::decode(&mut &payload[..]).map_err(|_| Error::InvalidPayload)?;
-		let StatePayload { signed_commitment, validator_proof, mmr_leaf, mmr_proof } = payload;
+		let StatePayload { signed_commitment, validator_proof } = payload;
+
+		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
+			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let validator_proof: Vec<MerkleProof<_>> = validator_proof
 			.into_iter()
 			.map(|p| MerkleProof {
@@ -158,10 +164,18 @@ impl LightClient {
 		Ok(())
 	}
 
-	pub fn verify_solochain_messages(&self, messages: &[u8], payload: &[u8]) -> Result<(), Error> {
-		let payload = SolochainMessagesPayload::decode(&mut &payload[..])
-			.map_err(|_| Error::InvalidPayload)?;
-		let SolochainMessagesPayload { header, leaf, proof } = payload;
+	pub fn verify_solochain_messages(
+		&self,
+		messages: &[u8],
+		header: &[u8],
+		mmr_leaf: &[u8],
+		mmr_proof: &[u8],
+	) -> Result<(), Error> {
+		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
+		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
+			.map_err(|_| Error::CantDecodeMmrProof)?;
+
 		let header_digest = header.get_other().ok_or(Error::DigestNotFound)?;
 
 		let messages_hash = Keccak256::hash(messages);
@@ -170,11 +184,11 @@ impl LightClient {
 		}
 
 		let header_hash = header.hash();
-		if header_hash != leaf.parent_number_and_hash.1 {
+		if header_hash != mmr_leaf.parent_number_and_hash.1 {
 			return Err(Error::HeaderHashNotMatch);
 		}
 
-		self.verify_mmr_leaf(self.mmr_root, leaf, proof)?;
+		self.verify_mmr_leaf(self.mmr_root, mmr_leaf, mmr_proof)?;
 		Ok(())
 	}
 
