@@ -4,9 +4,11 @@
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use core::result;
+use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use core::convert::TryInto;
+#[cfg(not(feature = "std"))]
+use core::result;
 
 #[cfg(feature = "std")]
 use std::convert::TryInto;
