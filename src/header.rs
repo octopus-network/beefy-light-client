@@ -2,13 +2,14 @@
 use alloc::vec::Vec;
 
 use beefy_merkle_tree::{Hash, Keccak256};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Error, Input};
 
 #[derive(Debug, Default, Encode, Decode)]
 pub struct Header {
 	/// The parent hash.
 	pub parent_hash: Hash,
 	/// The block number.
+	#[codec(compact)]
 	pub number: u32,
 	/// The state trie merkle root
 	pub state_root: Hash,
@@ -40,7 +41,7 @@ pub struct Digest {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode)]
 pub enum DigestItem {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -84,6 +85,48 @@ pub enum DigestItem {
 	/// 1. Runtime code blob is changed or
 	/// 2. `heap_pages` value is changed.
 	RuntimeEnvironmentUpdated,
+}
+
+impl Decode for DigestItem {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		let item_type: DigestItemType = Decode::decode(input)?;
+		match item_type {
+			DigestItemType::ChangesTrieRoot => Ok(Self::ChangesTrieRoot(Decode::decode(input)?)),
+			DigestItemType::PreRuntime => {
+				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
+				Ok(Self::PreRuntime(vals.0, vals.1))
+			}
+			DigestItemType::Consensus => {
+				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
+				Ok(Self::Consensus(vals.0, vals.1))
+			}
+			DigestItemType::Seal => {
+				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
+				Ok(Self::Seal(vals.0, vals.1))
+			}
+			DigestItemType::ChangesTrieSignal => {
+				Ok(Self::ChangesTrieSignal(Decode::decode(input)?))
+			}
+			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
+			DigestItemType::RuntimeEnvironmentUpdated => Ok(Self::RuntimeEnvironmentUpdated),
+		}
+	}
+}
+
+/// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
+/// process. We need an explicit control, because final runtimes are encoding their own
+/// digest items using `DigestItemRef` type and we can't auto-derive `Decode`
+/// trait for `DigestItemRef`.
+#[repr(u32)]
+#[derive(Encode, Decode)]
+pub enum DigestItemType {
+	Other = 0,
+	ChangesTrieRoot = 2,
+	Consensus = 4,
+	Seal = 5,
+	PreRuntime = 6,
+	ChangesTrieSignal = 7,
+	RuntimeEnvironmentUpdated = 8,
 }
 
 #[derive(Debug, Encode, Decode)]
