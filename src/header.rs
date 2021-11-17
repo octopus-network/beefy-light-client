@@ -1,10 +1,22 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use beefy_merkle_tree::{Hash, Keccak256};
+use beefy_merkle_tree::Hash;
 use codec::{Decode, Encode, Error, Input};
 
-#[derive(Debug, Default, Encode, Decode)]
+/// Do a Blake2 256-bit hash and place result in `dest`.
+fn blake2_256_into(data: &[u8], dest: &mut [u8; 32]) {
+	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
+}
+
+/// Do a Blake2 256-bit hash and return result.
+fn blake2_256(data: &[u8]) -> [u8; 32] {
+	let mut r = [0; 32];
+	blake2_256_into(data, &mut r);
+	r
+}
+
+#[derive(Debug, Encode, Decode)]
 pub struct Header {
 	/// The parent hash.
 	pub parent_hash: Hash,
@@ -21,7 +33,7 @@ pub struct Header {
 
 impl Header {
 	pub fn hash(&self) -> Hash {
-		Keccak256::hash(&self.encode())
+		blake2_256(&self.encode())
 	}
 
 	pub fn get_other(&self) -> Option<Vec<u8>> {
@@ -32,7 +44,7 @@ impl Header {
 	}
 }
 
-#[derive(Debug, Default, Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
@@ -41,7 +53,7 @@ pub struct Digest {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-#[derive(Debug, Encode)]
+#[derive(Debug)]
 pub enum DigestItem {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -87,6 +99,90 @@ pub enum DigestItem {
 	RuntimeEnvironmentUpdated,
 }
 
+#[derive(Debug, Encode, Decode)]
+pub enum ChangesTrieSignal {
+	/// New changes trie configuration is enacted, starting from **next block**.
+	///
+	/// The block that emits this signal will contain changes trie (CT) that covers
+	/// blocks range [BEGIN; current block], where BEGIN is (order matters):
+	/// - LAST_TOP_LEVEL_DIGEST_BLOCK+1 if top level digest CT has ever been created using current
+	///   configuration AND the last top level digest CT has been created at block
+	///   LAST_TOP_LEVEL_DIGEST_BLOCK;
+	/// - LAST_CONFIGURATION_CHANGE_BLOCK+1 if there has been CT configuration change before and
+	///   the last configuration change happened at block LAST_CONFIGURATION_CHANGE_BLOCK;
+	/// - 1 otherwise.
+	NewConfiguration(Option<ChangesTrieConfiguration>),
+}
+
+#[derive(Debug, Encode, Decode)]
+pub struct ChangesTrieConfiguration {
+	/// Interval (in blocks) at which level1-digests are created. Digests are not
+	/// created when this is less or equal to 1.
+	pub digest_interval: u32,
+	/// Maximal number of digest levels in hierarchy. 0 means that digests are not
+	/// created at all (even level1 digests). 1 means only level1-digests are created.
+	/// 2 means that every digest_interval^2 there will be a level2-digest, and so on.
+	/// Please ensure that maximum digest interval (i.e. digest_interval^digest_levels)
+	/// is within `u32` limits. Otherwise you'll never see digests covering such intervals
+	/// && maximal digests interval will be truncated to the last interval that fits
+	/// `u32` limits.
+	pub digest_levels: u32,
+}
+
+/// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
+/// process. We need an explicit control, because final runtimes are encoding their own
+/// digest items using `DigestItemRef` type and we can't auto-derive `Decode`
+/// trait for `DigestItemRef`.
+#[repr(u32)]
+#[derive(Encode, Decode)]
+pub enum DigestItemType {
+	Other = 0,
+	ChangesTrieRoot = 2,
+	Consensus = 4,
+	Seal = 5,
+	PreRuntime = 6,
+	ChangesTrieSignal = 7,
+	RuntimeEnvironmentUpdated = 8,
+}
+
+impl Encode for DigestItem {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		match self {
+			Self::ChangesTrieRoot(changes_trie_root) => {
+				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
+				changes_trie_root.encode_to(&mut v);
+			}
+			Self::Consensus(val, data) => {
+				DigestItemType::Consensus.encode_to(&mut v);
+				(val, data).encode_to(&mut v);
+			}
+			Self::Seal(val, sig) => {
+				DigestItemType::Seal.encode_to(&mut v);
+				(val, sig).encode_to(&mut v);
+			}
+			Self::PreRuntime(val, data) => {
+				DigestItemType::PreRuntime.encode_to(&mut v);
+				(val, data).encode_to(&mut v);
+			}
+			Self::ChangesTrieSignal(changes_trie_signal) => {
+				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
+				changes_trie_signal.encode_to(&mut v);
+			}
+			Self::Other(val) => {
+				DigestItemType::Other.encode_to(&mut v);
+				val.encode_to(&mut v);
+			}
+			Self::RuntimeEnvironmentUpdated => {
+				DigestItemType::RuntimeEnvironmentUpdated.encode_to(&mut v);
+			}
+		}
+
+		v
+	}
+}
+
 impl Decode for DigestItem {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let item_type: DigestItemType = Decode::decode(input)?;
@@ -113,52 +209,6 @@ impl Decode for DigestItem {
 	}
 }
 
-/// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
-/// process. We need an explicit control, because final runtimes are encoding their own
-/// digest items using `DigestItemRef` type and we can't auto-derive `Decode`
-/// trait for `DigestItemRef`.
-#[repr(u32)]
-#[derive(Encode, Decode)]
-pub enum DigestItemType {
-	Other = 0,
-	ChangesTrieRoot = 2,
-	Consensus = 4,
-	Seal = 5,
-	PreRuntime = 6,
-	ChangesTrieSignal = 7,
-	RuntimeEnvironmentUpdated = 8,
-}
-
-#[derive(Debug, Encode, Decode)]
-pub enum ChangesTrieSignal {
-	/// New changes trie configuration is enacted, starting from **next block**.
-	///
-	/// The block that emits this signal will contain changes trie (CT) that covers
-	/// blocks range [BEGIN; current block], where BEGIN is (order matters):
-	/// - LAST_TOP_LEVEL_DIGEST_BLOCK+1 if top level digest CT has ever been created using current
-	///   configuration AND the last top level digest CT has been created at block
-	///   LAST_TOP_LEVEL_DIGEST_BLOCK;
-	/// - LAST_CONFIGURATION_CHANGE_BLOCK+1 if there has been CT configuration change before and
-	///   the last configuration change happened at block LAST_CONFIGURATION_CHANGE_BLOCK;
-	/// - 1 otherwise.
-	NewConfiguration(Option<ChangesTrieConfiguration>),
-}
-
-#[derive(Debug, Default, Encode, Decode)]
-pub struct ChangesTrieConfiguration {
-	/// Interval (in blocks) at which level1-digests are created. Digests are not
-	/// created when this is less or equal to 1.
-	pub digest_interval: u32,
-	/// Maximal number of digest levels in hierarchy. 0 means that digests are not
-	/// created at all (even level1 digests). 1 means only level1-digests are created.
-	/// 2 means that every digest_interval^2 there will be a level2-digest, and so on.
-	/// Please ensure that maximum digest interval (i.e. digest_interval^digest_levels)
-	/// is within `u32` limits. Otherwise you'll never see digests covering such intervals
-	/// && maximal digests interval will be truncated to the last interval that fits
-	/// `u32` limits.
-	pub digest_levels: u32,
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -182,5 +232,25 @@ mod tests {
 		println!("header: {:?}", header);
 
 		assert_eq!(header.is_ok(), true);
+	}
+
+	#[test]
+	fn hash_header_works() {
+		let encoded_header = [
+			146, 205, 245, 120, 196, 112, 133, 165, 153, 34, 86, 240, 220, 249, 125, 11, 25, 241,
+			241, 201, 222, 77, 95, 227, 12, 58, 206, 97, 145, 182, 229, 219, 8, 88, 19, 72, 51,
+			123, 15, 62, 20, 134, 32, 23, 61, 170, 165, 249, 77, 0, 216, 129, 112, 93, 203, 240,
+			170, 131, 239, 218, 186, 97, 210, 237, 225, 235, 134, 73, 33, 73, 151, 87, 78, 32, 196,
+			100, 56, 138, 23, 36, 32, 210, 84, 3, 104, 43, 187, 184, 12, 73, 104, 49, 200, 204, 31,
+			143, 13, 8, 2, 112, 178, 1, 53, 47, 36, 191, 28, 151, 112, 185, 159, 143, 113, 32, 24,
+			33, 65, 28, 244, 20, 55, 124, 155, 140, 45, 188, 238, 97, 219, 135, 214, 0, 4, 54,
+		];
+
+		let header = Header::decode(&mut &encoded_header[..]).unwrap();
+
+		assert_eq!(
+			header.hash(),
+			hex!("b0fc041accc53f07e0249cf63a6364c7aac035855e343b4e673a7af87f048941")
+		);
 	}
 }
