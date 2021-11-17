@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 use beefy_merkle_tree::{Hash, Keccak256};
 use codec::{Decode, Encode};
 

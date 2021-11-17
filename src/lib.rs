@@ -1,6 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use core::convert::TryInto;
+#[cfg(not(feature = "std"))]
 use core::result;
 
 #[cfg(feature = "std")]
@@ -63,6 +72,8 @@ pub enum Error {
 	CantDecodeMmrLeaf,
 	///
 	CantDecodeMmrProof,
+	///
+	MissingLatestCommitment,
 }
 
 #[derive(Debug, Decode)]
@@ -93,7 +104,7 @@ pub struct StatePayload {
 
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
-	mmr_root: Hash,
+	latest_commitment: Option<Commitment>,
 	validator_set: BeefyNextAuthoritySet,
 }
 
@@ -106,7 +117,7 @@ pub fn new(initial_public_keys: Vec<String>) -> LightClient {
 		})
 		.collect();
 	LightClient {
-		mmr_root: Hash::default(),
+		latest_commitment: None,
 		validator_set: BeefyNextAuthoritySet {
 			id: 0,
 			len: initial_public_keys.len() as u32,
@@ -152,11 +163,12 @@ impl LightClient {
 				return Err(Error::InvalidValidatorProof);
 			}
 		}
-		let commitment = self.verify_commitment(signed_commitment)?;
-		self.verify_mmr_leaf(commitment.payload, mmr_leaf.clone(), mmr_proof)?;
 
-		// update mmr_root
-		self.mmr_root = commitment.payload;
+		let commitment = self.verify_commitment(signed_commitment)?;
+		// update the latest commitment, including mmr_root
+		self.latest_commitment = Some(commitment);
+
+		self.verify_mmr_leaf(commitment.payload, mmr_leaf.clone(), mmr_proof)?;
 
 		// update validator_set
 		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
@@ -172,6 +184,7 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
+		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
 		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
@@ -189,7 +202,7 @@ impl LightClient {
 			return Err(Error::HeaderHashNotMatch);
 		}
 
-		self.verify_mmr_leaf(self.mmr_root, mmr_leaf, mmr_proof)?;
+		self.verify_mmr_leaf(mmr_root, mmr_leaf, mmr_proof)?;
 		Ok(())
 	}
 
@@ -200,7 +213,6 @@ impl LightClient {
 	fn verify_commitment(&self, signed_commitment: SignedCommitment) -> Result<Commitment, Error> {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let commitment_hash = commitment.hash();
-		println!("commitment_hash: {:?}", commitment_hash);
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
 		for signature in signatures.into_iter() {

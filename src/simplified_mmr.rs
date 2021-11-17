@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 use beefy_merkle_tree::{Hash, Keccak256};
 
 // Get the value of the bit at the given 'index' in 'n'.

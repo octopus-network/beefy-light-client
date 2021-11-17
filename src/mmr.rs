@@ -1,9 +1,11 @@
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use core::convert::Into;
+
 use crate::BeefyNextAuthoritySet;
 use beefy_merkle_tree::{verify_proof, Hash, Keccak256, Leaf, MerkleProof};
 use codec::{Decode, Encode};
-
-#[cfg(not(feature = "std"))]
-use core::convert::Into;
 
 #[derive(Clone, Debug, Default, Encode, Decode)]
 pub struct MmrLeafVersion(u8);
