@@ -55,4 +55,14 @@ mod tests {
 		let signature: Signature = signature_hex_str.into();
 		assert_eq!(signature, Signature(hex!("34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301").into()));
 	}
+
+	#[test]
+	fn decode_signed_commitment_works() {
+		let encoded_signed_commitment = hex!("ea1f52f73f22c9b9ea45b59f36de86e120b8f50b73b963c529584c838336c104a100000000000000000000000401e1b5cf0985f1c6a4d90fc5a050fb586166b0482e995ba1b00b3539097185ab5e7c07832d49a5cddf9b55a838b39eb9224b94077cfb04345788a15219598e858500");
+
+		let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
+		println!("signed_commitment: {:?}", signed_commitment);
+
+		assert_eq!(signed_commitment.is_ok(), true);
+	}
 }

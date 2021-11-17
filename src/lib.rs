@@ -53,7 +53,7 @@ pub enum Error {
 	///
 	InvalidMessage,
 	///
-	InvalidPayload,
+	InvalidSignedCommitment,
 	///
 	InvalidRecoveryId,
 	///
@@ -74,32 +74,6 @@ pub enum Error {
 	CantDecodeMmrProof,
 	///
 	MissingLatestCommitment,
-}
-
-#[derive(Debug, Decode)]
-pub struct MerkleProofPayload {
-	/// Root hash of generated merkle tree.
-	pub root: Hash,
-	/// Proof items (does not contain the leaf hash, nor the root obviously).
-	///
-	/// This vec contains all inner node hashes necessary to reconstruct the root hash given the
-	/// leaf hash.
-	pub proof: Vec<Hash>,
-	/// Number of leaves in the original tree.
-	///
-	/// This is needed to detect a case where we have an odd number of leaves that "get promoted"
-	/// to upper layers.
-	pub number_of_leaves: u32,
-	/// Index of the leaf the proof is for (0-based).
-	pub leaf_index: u32,
-	/// Leaf content.
-	pub leaf: Public,
-}
-
-#[derive(Debug, Decode)]
-pub struct StatePayload {
-	signed_commitment: SignedCommitment,
-	validator_proof: Vec<MerkleProofPayload>,
 }
 
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
@@ -130,26 +104,16 @@ impl LightClient {
 	// Import a signed commitment and update the state of light client.
 	pub fn update_state(
 		&mut self,
-		payload: &[u8],
+		signed_commitment: &[u8],
+		validator_proof: Vec<MerkleProof<&Public>>,
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let payload = StatePayload::decode(&mut &payload[..]).map_err(|_| Error::InvalidPayload)?;
-		let StatePayload { signed_commitment, validator_proof } = payload;
-
+		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
+			.map_err(|_| Error::InvalidSignedCommitment)?;
 		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let validator_proof: Vec<MerkleProof<_>> = validator_proof
-			.into_iter()
-			.map(|p| MerkleProof {
-				root: p.root,
-				proof: p.proof,
-				number_of_leaves: p.number_of_leaves as usize,
-				leaf_index: p.leaf_index as usize,
-				leaf: p.leaf,
-			})
-			.collect();
 
 		// TODO: check length
 		for proof in validator_proof {
