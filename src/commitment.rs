@@ -1,4 +1,10 @@
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+#[cfg(not(feature = "std"))]
+use alloc::Vec::Vec;
+
 use beefy_merkle_tree::{Hash, Keccak256};
+use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ByteOrder, LittleEndian};
 use codec::Decode;
 use core::convert::TryInto;
@@ -15,7 +21,7 @@ impl From<&str> for Signature {
 	}
 }
 
-#[derive(Debug, Decode)]
+#[derive(Debug, Clone, Copy, Decode, BorshDeserialize, BorshSerialize)]
 pub struct Commitment {
 	pub payload: Hash,
 	pub block_number: u64,
