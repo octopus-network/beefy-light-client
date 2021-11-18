@@ -2,6 +2,11 @@
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use core::cmp;
+
+#[cfg(feature = "std")]
+use std::cmp;
 
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -21,11 +26,25 @@ impl From<&str> for Signature {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, BorshDeserialize, BorshSerialize)]
 pub struct Commitment {
 	pub payload: Hash,
 	pub block_number: u64,
 	pub validator_set_id: u32,
+}
+
+impl cmp::PartialOrd for Commitment {
+	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl cmp::Ord for Commitment {
+	fn cmp(&self, other: &Self) -> cmp::Ordering {
+		self.validator_set_id
+			.cmp(&other.validator_set_id)
+			.then_with(|| self.block_number.cmp(&other.block_number))
+	}
 }
 
 impl Commitment {
@@ -64,5 +83,25 @@ mod tests {
 		println!("signed_commitment: {:?}", signed_commitment);
 
 		assert_eq!(signed_commitment.is_ok(), true);
+	}
+
+	#[test]
+	fn commitment_ordering() {
+		fn commitment(block_number: u64, validator_set_id: u32) -> Commitment {
+			Commitment { payload: Hash::default(), block_number, validator_set_id }
+		}
+
+		// given
+		let a = commitment(1, 0);
+		let b = commitment(2, 1);
+		let c = commitment(10, 0);
+		let d = commitment(10, 1);
+
+		// then
+		assert!(a < b);
+		assert!(a < c);
+		assert!(c < b);
+		assert!(c < d);
+		assert!(b < d);
 	}
 }

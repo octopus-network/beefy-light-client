@@ -199,9 +199,9 @@ impl LightClient {
 		// proof: simplified_mmr::MerkleProof,
 		proof: mmr::MmrLeafProof,
 	) -> Result<bool, Error> {
-		// let leaf_hash = leaf.hash();
+		let leaf_hash = leaf.hash();
 		// let result = simplified_mmr::verify_proof(root, leaf_hash, proof);
-		mmr::verify_leaf_proof(root, leaf, proof)
+		mmr::verify_leaf_proof(root, leaf_hash, proof)
 		// if !result {
 		// 	return Err(Error::InvalidMmrProof);
 		// }

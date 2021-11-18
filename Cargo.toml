@@ -12,6 +12,7 @@ byteorder = { version = "1", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7.0", features = ["static-context"], default-features = false }
+mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
@@ -25,4 +26,5 @@ std = [
 	"codec/std",
 	"hex/std",
 	"libsecp256k1/std",
+	"mmr-lib/std",
 ]
