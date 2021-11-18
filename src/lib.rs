@@ -74,6 +74,10 @@ pub enum Error {
 	CantDecodeMmrProof,
 	///
 	MissingLatestCommitment,
+	///
+	CommitmentAlreadyUpdated,
+	///
+	ValidatorNotFound,
 }
 
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
@@ -105,30 +109,24 @@ impl LightClient {
 	pub fn update_state(
 		&mut self,
 		signed_commitment: &[u8],
-		validator_proof: Vec<MerkleProof<&Public>>,
+		validator_proofs: Vec<MerkleProof<&Public>>,
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
 		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
 			.map_err(|_| Error::InvalidSignedCommitment)?;
+
+		if let Some(latest_commitment) = &self.latest_commitment {
+			if signed_commitment.commitment <= *latest_commitment {
+				return Err(Error::CommitmentAlreadyUpdated);
+			}
+		}
+
 		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 
-		// TODO: check length
-		for proof in validator_proof {
-			if !verify_proof::<Keccak256, _, _>(
-				&self.validator_set.root,
-				proof.proof,
-				proof.number_of_leaves,
-				proof.leaf_index,
-				&proof.leaf,
-			) {
-				return Err(Error::InvalidValidatorProof);
-			}
-		}
-
-		let commitment = self.verify_commitment(signed_commitment)?;
+		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
 		// update the latest commitment, including mmr_root
 		self.latest_commitment = Some(commitment);
 
@@ -174,8 +172,13 @@ impl LightClient {
 		Ok(())
 	}
 
-	fn verify_commitment(&self, signed_commitment: SignedCommitment) -> Result<Commitment, Error> {
+	fn verify_commitment(
+		&self,
+		signed_commitment: SignedCommitment,
+		validator_proofs: Vec<MerkleProof<&Public>>,
+	) -> Result<Commitment, Error> {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
+		// TODO: check length
 		let commitment_hash = commitment.hash();
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
@@ -185,7 +188,28 @@ impl LightClient {
 					.or(Err(Error::InvalidSignature))?;
 				let recovery_id = libsecp256k1::RecoveryId::parse(signature.0[64])
 					.or(Err(Error::InvalidRecoveryId))?;
-				libsecp256k1::recover(&msg, &sig, &recovery_id).or(Err(Error::WrongSignature))?;
+				let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
+					.or(Err(Error::WrongSignature))?
+					.serialize_compressed();
+				let mut found = false;
+				for proof in validator_proofs.iter() {
+					if validator == *proof.leaf {
+						found = true;
+						if !verify_proof::<Keccak256, _, _>(
+							&self.validator_set.root,
+							proof.proof.clone(),
+							proof.number_of_leaves,
+							proof.leaf_index,
+							&proof.leaf,
+						) {
+							return Err(Error::InvalidValidatorProof);
+						}
+						break;
+					}
+				}
+				if !found {
+					return Err(Error::ValidatorNotFound);
+				}
 			}
 		}
 
@@ -229,8 +253,8 @@ mod tests {
 			validator_set_id: 0,
 		};
 		let signed_commitment = SignedCommitment { commitment, signatures: vec![Some(Signature(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af73300").into()))] };
-		let res = lc.verify_commitment(signed_commitment).unwrap();
-		println!("{:?}", res);
+		// let res = lc.verify_commitment(signed_commitment).unwrap();
+		// println!("{:?}", res);
 
 		assert_eq!(2 + 2, 4);
 		// let pk = hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1");
@@ -243,7 +267,7 @@ mod tests {
 			"14f213146a362c397545659ac7795926514696ad49565972d64964040394482c"
 		))
 		.unwrap();
-		let signature =  Signature(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af73300").into());
+		let signature = Signature(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af73300").into());
 		let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64]).unwrap();
 		let public_key = libsecp256k1::recover(
 			&msg,
