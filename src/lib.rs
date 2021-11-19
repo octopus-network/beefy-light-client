@@ -122,15 +122,26 @@ impl LightClient {
 			}
 		}
 
-		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 
 		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
+		if cfg!(feature = "std") {
+			println!("commitment {:?}", commitment);
+		}
 		// update the latest commitment, including mmr_root
 		self.latest_commitment = Some(commitment);
 
-		let result = self.verify_mmr_leaf(commitment.payload, mmr_leaf.clone(), mmr_proof)?;
+		let result = self.verify_mmr_leaf(commitment.payload, mmr_leaf_hash, mmr_proof)?;
+		if cfg!(feature = "std") {
+			println!("verify_mmr_leaf {:?}", result);
+		}
 		if !result {
 			return Err(Error::InvalidMmrLeafProof);
 		}
@@ -151,7 +162,11 @@ impl LightClient {
 	) -> Result<(), Error> {
 		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
-		let mmr_leaf = MmrLeaf::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 
@@ -167,7 +182,7 @@ impl LightClient {
 			return Err(Error::HeaderHashNotMatch);
 		}
 
-		self.verify_mmr_leaf(mmr_root, mmr_leaf, mmr_proof)?;
+		self.verify_mmr_leaf(mmr_root, mmr_leaf_hash, mmr_proof)?;
 		Ok(())
 	}
 
@@ -221,14 +236,14 @@ impl LightClient {
 
 	fn verify_mmr_leaf(
 		&self,
-		root: Hash,
-		leaf: MmrLeaf,
+		root_hash: Hash,
+		leaf_hash: Hash,
 		// proof: simplified_mmr::MerkleProof,
 		proof: mmr::MmrLeafProof,
 	) -> Result<bool, Error> {
-		let leaf_hash = leaf.hash();
+		// let leaf_hash = leaf.hash();
 		// let result = simplified_mmr::verify_proof(root, leaf_hash, proof);
-		mmr::verify_leaf_proof(root, leaf_hash, proof)
+		mmr::verify_leaf_proof(root_hash, leaf_hash, proof)
 		// if !result {
 		// 	return Err(Error::InvalidMmrProof);
 		// }
@@ -257,30 +272,10 @@ mod tests {
 			"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
 			"0x031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa".to_string(), // Eve
 		];
+
 		let mut lc = new(public_keys);
 		println!("light client: {:?}", lc);
-		let encoded_signed_commitment_1 = vec![
-			128, 63, 134, 61, 200, 97, 32, 23, 104, 25, 243, 188, 168, 45, 250, 252, 113, 40, 48,
-			105, 236, 113, 35, 60, 163, 1, 38, 111, 65, 205, 236, 209, 9, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 20, 1, 91, 157, 95, 64, 74, 202, 233, 130, 174, 60, 145, 10, 39, 45, 156, 143,
-			103, 180, 246, 96, 207, 133, 159, 64, 176, 80, 82, 179, 118, 121, 221, 26, 96, 71, 218,
-			96, 235, 19, 14, 131, 178, 178, 204, 191, 113, 247, 234, 78, 235, 70, 178, 142, 48,
-			231, 155, 219, 77, 237, 200, 114, 67, 191, 25, 241, 0, 1, 188, 208, 147, 96, 15, 212,
-			183, 34, 189, 17, 14, 16, 109, 116, 170, 229, 181, 146, 9, 232, 188, 245, 28, 107, 164,
-			98, 205, 142, 171, 165, 215, 187, 23, 60, 106, 143, 176, 248, 93, 72, 244, 171, 158,
-			147, 171, 229, 148, 69, 96, 6, 27, 211, 74, 138, 176, 91, 132, 210, 202, 228, 139, 233,
-			103, 185, 0, 1, 229, 11, 119, 228, 142, 191, 100, 187, 79, 202, 195, 58, 137, 7, 177,
-			175, 218, 243, 3, 91, 120, 65, 198, 48, 85, 103, 218, 96, 150, 135, 173, 241, 63, 82,
-			87, 247, 192, 141, 93, 212, 247, 26, 133, 65, 211, 20, 198, 163, 154, 157, 144, 180,
-			109, 15, 139, 238, 165, 21, 225, 119, 165, 39, 210, 90, 0, 0, 1, 178, 62, 203, 100, 96,
-			229, 253, 237, 31, 175, 62, 194, 176, 1, 25, 15, 191, 141, 44, 18, 222, 40, 107, 100,
-			171, 45, 224, 141, 152, 83, 189, 129, 72, 34, 211, 37, 143, 42, 29, 62, 228, 77, 53,
-			181, 97, 25, 228, 125, 30, 164, 50, 196, 86, 46, 254, 14, 155, 254, 3, 187, 84, 144,
-			249, 195, 0,
-		];
 
-		let signed_commitment_1 = SignedCommitment::decode(&mut &encoded_signed_commitment_1[..]);
-		println!("signed_commitment_1: {:?}", signed_commitment_1);
 		let alice_pk = libsecp256k1::PublicKey::parse_slice(
 			&hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1"),
 			None,
@@ -311,6 +306,10 @@ mod tests {
 		)
 		.unwrap()
 		.serialize_compressed();
+
+		let encoded_signed_commitment_1 = hex!("f45927644a0b5bc6f1ce667330071fbaea498403c084eb0d4cb747114887345d0900000000000000000000001401b9b5b39fb15d7e22710ad06075cf0e20c4b0c1e3d0a6482946e1d0daf86ca2e37b40209316f00a549cdd2a7fd191694fee4f76f698d0525642563e665db85d6300010ee39cb2cb008f7dce753541b5442e98a260250286b335d6048f2dd4695237655ccc93ebcd3d7c04461e0b9d12b81b21a826c5ee3eebcd6ab9e85c8717f6b1ae010001b094279e0bb4442ba07165da47ab9c0d7d0f479e31d42c879564915714e8ea3d42393dc430addc4a5f416316c02e0676e525c56a3d0c0033224ebda4c83052670001f965d806a16c5dfb9d119f78cdbed379bccb071528679306208880ad29a9cf9e00e75f1b284fa3457b7b37223a2272cf2bf90ce4fd7e84e321eddec3cdeb66f801");
+		let signed_commitment_1 = SignedCommitment::decode(&mut &encoded_signed_commitment_1[..]);
+		println!("signed_commitment_1: {:?}", signed_commitment_1);
 
 		let proofs_1 = vec![
 			MerkleProof {
@@ -385,34 +384,117 @@ mod tests {
 		];
 		println!("proofs_1: {:?}", proofs_1);
 
-		let encoded_mmr_leaf_1 = vec![
-			197, 1, 0, 80, 2, 0, 0, 215, 232, 64, 39, 138, 137, 92, 111, 203, 89, 109, 35, 222,
-			184, 160, 96, 110, 238, 222, 180, 124, 34, 185, 255, 101, 17, 42, 4, 21, 13, 10, 64, 1,
-			0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 48, 72, 3, 250, 90, 145, 217, 133, 44, 170, 254, 4,
-			180, 184, 103, 164, 237, 39, 160, 122, 91, 238, 61, 21, 7, 180, 177, 135, 166, 135,
-			119, 162, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0,
-		];
+		let  encoded_mmr_leaf_1 = hex!("c501000800000079f0451c096266bee167393545bafc7b27b7d14810084a843955624588ba29c1010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
 
-		let mmr_leaf_1 = MmrLeaf::decode(&mut &encoded_mmr_leaf_1[..]);
+		let leaf: Vec<u8> = Decode::decode(&mut &encoded_mmr_leaf_1[..]).unwrap();
+		let mmr_leaf_1: MmrLeaf = Decode::decode(&mut &*leaf).unwrap();
 		println!("mmr_leaf_1: {:?}", mmr_leaf_1);
 
-		let encoded_mmr_proof_1 = vec![
-			80, 2, 0, 0, 0, 0, 0, 0, 81, 2, 0, 0, 0, 0, 0, 0, 12, 170, 169, 214, 170, 221, 156, 76,
-			239, 118, 2, 95, 188, 66, 102, 27, 216, 239, 33, 139, 135, 245, 88, 81, 154, 85, 165,
-			111, 189, 30, 248, 144, 132, 55, 211, 139, 171, 189, 76, 229, 184, 51, 53, 116, 76, 97,
-			218, 194, 250, 245, 186, 35, 233, 34, 116, 206, 131, 244, 206, 56, 141, 118, 64, 200,
-			249, 233, 120, 75, 100, 195, 5, 187, 143, 112, 31, 118, 190, 209, 5, 206, 115, 63, 161,
-			237, 82, 9, 226, 139, 116, 28, 176, 86, 151, 47, 247, 58, 127,
-		];
+		let encoded_mmr_proof_1 =  hex!("0800000000000000090000000000000004c2d6348aef1ef52e779c59bcc1d87fa0175b59b4fa2ea8fc322e4ceb2bdd1ea2");
 		let mmr_proof_1 = MmrLeafProof::decode(&mut &encoded_mmr_proof_1[..]);
 		println!("mmr_proof_1: {:?}", mmr_proof_1);
-		assert!(lc
+		let result = lc
 			.update_state(
 				&encoded_signed_commitment_1,
 				proofs_1,
 				&encoded_mmr_leaf_1,
 				&encoded_mmr_proof_1,
+			)
+			.is_ok();
+		println!("light client: {:?} {}", lc, result);
+
+		let encoded_signed_commitment_2 = hex!("8d3cb96dca5110aff60423046bbf4a76db0e71158aa5586ffa3423fbaf9ef1da1100000000000000000000001401864ce4553324cc92db4ac622b9dbb031a6a4bd26ee1ab66e0272f567928865ec46847b55f98fa7e1dbafb0256f0a23e2f0a375e4547f5d1819d9b8694f17f6a80101c9ae8aad1b81e2249736324716c09c122889317e4f3e47066c501a839c15312e5c823dd37436d8e3bac8041329c5d0ed5dd94c45b5c1eed13d9111924f0a13c1000159fe06519c672d183de7776b6902a13c098d917721b5600a2296dca3a74a81bc01031a671fdb5e5050ff1f432d72e7a2c144ab38f8401ffd368e693257162a4600014290c6aa5028ceb3a3a773c80beee2821f3a7f5b43f592f7a82b0cbbbfab5ba41363daae5a7006fea2f89a30b4900f85fa82283587df789fd7b5b773ad7e8c410100");
+		let signed_commitment_2 = SignedCommitment::decode(&mut &encoded_signed_commitment_2[..]);
+		println!("signed_commitment_2: {:?}", signed_commitment_2);
+
+		let proofs_2 = vec![
+			MerkleProof {
+				root: [
+					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
+					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
+				],
+				proof: vec![
+					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4").into(),
+					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+				],
+				number_of_leaves: 5,
+				leaf_index: 0,
+				leaf: &alice_pk,
+			},
+			MerkleProof {
+				root: [
+					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
+					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
+				],
+				proof: vec![
+					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d").into(),
+					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+				],
+				number_of_leaves: 5,
+				leaf_index: 1,
+				leaf: &bob_pk,
+			},
+			MerkleProof {
+				root: [
+					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
+					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
+				],
+				proof: vec![
+					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a").into(),
+					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+				],
+				number_of_leaves: 5,
+				leaf_index: 2,
+				leaf: &charlie_pk,
+			},
+			MerkleProof {
+				root: [
+					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
+					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
+				],
+				proof: vec![
+					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c").into(),
+					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+				],
+				number_of_leaves: 5,
+				leaf_index: 3,
+				leaf: &dave_pk,
+			},
+			MerkleProof {
+				root: [
+					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
+					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
+				],
+				proof: vec![hex!(
+					"a33c1baaa379963ee43c3a7983a3157080c32a462a9774f1fe6d2f0480428e5c"
+				)
+				.into()],
+				number_of_leaves: 5,
+				leaf_index: 4,
+				leaf: &eve_pk,
+			},
+		];
+		println!("proofs_2: {:?}", proofs_2);
+
+		let  encoded_mmr_leaf_2 = hex!("c5010010000000d0a3a930e5f3b0f997c3794023c86f8ba28c6ba2cacf230d08d46be0fdf29435010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
+
+		let leaf: Vec<u8> = Decode::decode(&mut &encoded_mmr_leaf_2[..]).unwrap();
+		let mmr_leaf_2: MmrLeaf = Decode::decode(&mut &*leaf).unwrap();
+		println!("mmr_leaf_2: {:?}", mmr_leaf_2);
+
+		let encoded_mmr_proof_2 =  hex!("10000000000000001100000000000000048a766e1ab001e2ff796517dcfbff957a751c994aff4c3ba9447a46d88ec2ef15");
+		let mmr_proof_2 = MmrLeafProof::decode(&mut &encoded_mmr_proof_2[..]);
+		println!("mmr_proof_2: {:?}", mmr_proof_2);
+		assert!(lc
+			.update_state(
+				&encoded_signed_commitment_2,
+				proofs_2,
+				&encoded_mmr_leaf_2,
+				&encoded_mmr_proof_2,
 			)
 			.is_ok());
 		println!("light client: {:?}", lc);
