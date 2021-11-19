@@ -8,20 +8,15 @@ use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
-use core::convert::TryInto;
-#[cfg(not(feature = "std"))]
 use core::result;
 
-#[cfg(feature = "std")]
-use std::convert::TryInto;
-
-use beefy_merkle_tree::{merkle_root, verify_proof, Hash, Keccak256, MerkleProof};
+use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256, MerkleProof};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
 use commitment::{Commitment, SignedCommitment};
 use header::Header;
 use mmr::MmrLeaf;
-use validator_set::{BeefyNextAuthoritySet, Public, ValidatorSetId};
+use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
 
 pub mod commitment;
 pub mod header;
@@ -79,6 +74,18 @@ pub enum Error {
 	///
 	ValidatorNotFound,
 }
+/// Convert BEEFY secp256k1 public keys into Ethereum addresses
+fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
+	libsecp256k1::PublicKey::parse_slice(
+		compressed_key,
+		Some(libsecp256k1::PublicKeyFormat::Compressed),
+	)
+	// uncompress the key
+	.map(|pub_key| pub_key.serialize().to_vec())
+	// now convert to ETH address
+	.map(|uncompressed| Keccak256::hash(&uncompressed[1..])[12..].to_vec())
+	.unwrap_or_default()
+}
 
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
@@ -88,12 +95,15 @@ pub struct LightClient {
 
 // Initialize light client using the BeefyId of the initial validator set.
 pub fn new(initial_public_keys: Vec<String>) -> LightClient {
-	let initial_public_keys: Vec<Public> = initial_public_keys
+	let initial_public_keys: Vec<Vec<u8>> = initial_public_keys
 		.into_iter()
 		.map(|hex_str| {
-			hex::decode(&hex_str[2..]).map_or([0; 33], |s| s.try_into().unwrap_or([0; 33]))
+			hex::decode(&hex_str[2..])
+				.map(|compressed_key| beefy_ecdsa_to_ethereum(&compressed_key))
+				.unwrap_or_default()
 		})
 		.collect();
+
 	LightClient {
 		latest_commitment: None,
 		validator_set: BeefyNextAuthoritySet {
@@ -109,7 +119,7 @@ impl LightClient {
 	pub fn update_state(
 		&mut self,
 		signed_commitment: &[u8],
-		validator_proofs: Vec<MerkleProof<&Public>>,
+		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
@@ -122,26 +132,20 @@ impl LightClient {
 			}
 		}
 
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: Vec<u8> =
 			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = mmr_leaf.hash();
 
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 
 		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
-		if cfg!(feature = "std") {
-			println!("commitment {:?}", commitment);
-		}
 		// update the latest commitment, including mmr_root
 		self.latest_commitment = Some(commitment);
 
-		let result = self.verify_mmr_leaf(commitment.payload, mmr_leaf_hash, mmr_proof)?;
-		if cfg!(feature = "std") {
-			println!("verify_mmr_leaf {:?}", result);
-		}
+		let result = mmr::verify_leaf_proof(commitment.payload, mmr_leaf_hash, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof);
 		}
@@ -162,11 +166,11 @@ impl LightClient {
 	) -> Result<(), Error> {
 		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: Vec<u8> =
 			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = mmr_leaf.hash();
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 
@@ -182,7 +186,10 @@ impl LightClient {
 			return Err(Error::HeaderHashNotMatch);
 		}
 
-		self.verify_mmr_leaf(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		if !result {
+			return Err(Error::InvalidMmrLeafProof);
+		}
 		Ok(())
 	}
 
@@ -193,7 +200,7 @@ impl LightClient {
 	fn verify_commitment(
 		&self,
 		signed_commitment: SignedCommitment,
-		validator_proofs: Vec<MerkleProof<&Public>>,
+		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
 	) -> Result<Commitment, Error> {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		// TODO: check length
@@ -208,10 +215,12 @@ impl LightClient {
 					.or(Err(Error::InvalidRecoveryId))?;
 				let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
 					.or(Err(Error::WrongSignature))?
-					.serialize_compressed();
+					.serialize()
+					.to_vec();
+				let validator_address = Keccak256::hash(&validator[1..])[12..].to_vec();
 				let mut found = false;
 				for proof in validator_proofs.iter() {
-					if validator == *proof.leaf {
+					if validator_address == *proof.leaf {
 						found = true;
 						if !verify_proof::<Keccak256, _, _>(
 							&self.validator_set.root,
@@ -232,22 +241,6 @@ impl LightClient {
 		}
 
 		Ok(commitment)
-	}
-
-	fn verify_mmr_leaf(
-		&self,
-		root_hash: Hash,
-		leaf_hash: Hash,
-		// proof: simplified_mmr::MerkleProof,
-		proof: mmr::MmrLeafProof,
-	) -> Result<bool, Error> {
-		// let leaf_hash = leaf.hash();
-		// let result = simplified_mmr::verify_proof(root, leaf_hash, proof);
-		mmr::verify_leaf_proof(root_hash, leaf_hash, proof)
-		// if !result {
-		// 	return Err(Error::InvalidMmrProof);
-		// }
-		// Ok(())
 	}
 }
 
@@ -276,113 +269,87 @@ mod tests {
 		let mut lc = new(public_keys);
 		println!("light client: {:?}", lc);
 
-		let alice_pk = libsecp256k1::PublicKey::parse_slice(
-			&hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1"),
-			None,
-		)
-		.unwrap()
-		.serialize_compressed();
-		let bob_pk = libsecp256k1::PublicKey::parse_slice(
-			&hex!("0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27"),
-			None,
-		)
-		.unwrap()
-		.serialize_compressed();
-		let charlie_pk = libsecp256k1::PublicKey::parse_slice(
-			&hex!("0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb"),
-			None,
-		)
-		.unwrap()
-		.serialize_compressed();
-		let dave_pk = libsecp256k1::PublicKey::parse_slice(
-			&hex!("03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c"),
-			None,
-		)
-		.unwrap()
-		.serialize_compressed();
-		let eve_pk = libsecp256k1::PublicKey::parse_slice(
-			&hex!("031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa"),
-			None,
-		)
-		.unwrap()
-		.serialize_compressed();
+		let alice_pk = beefy_ecdsa_to_ethereum(
+			&hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1")[..],
+		);
+		let bob_pk = beefy_ecdsa_to_ethereum(
+			&hex!("0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27")[..],
+		);
+		let charlie_pk = beefy_ecdsa_to_ethereum(
+			&hex!("0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb")[..],
+		);
+		let dave_pk = beefy_ecdsa_to_ethereum(
+			&hex!("03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c")[..],
+		);
+		let eve_pk = beefy_ecdsa_to_ethereum(
+			&hex!("031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa")[..],
+		);
 
 		let encoded_signed_commitment_1 = hex!("f45927644a0b5bc6f1ce667330071fbaea498403c084eb0d4cb747114887345d0900000000000000000000001401b9b5b39fb15d7e22710ad06075cf0e20c4b0c1e3d0a6482946e1d0daf86ca2e37b40209316f00a549cdd2a7fd191694fee4f76f698d0525642563e665db85d6300010ee39cb2cb008f7dce753541b5442e98a260250286b335d6048f2dd4695237655ccc93ebcd3d7c04461e0b9d12b81b21a826c5ee3eebcd6ab9e85c8717f6b1ae010001b094279e0bb4442ba07165da47ab9c0d7d0f479e31d42c879564915714e8ea3d42393dc430addc4a5f416316c02e0676e525c56a3d0c0033224ebda4c83052670001f965d806a16c5dfb9d119f78cdbed379bccb071528679306208880ad29a9cf9e00e75f1b284fa3457b7b37223a2272cf2bf90ce4fd7e84e321eddec3cdeb66f801");
 		let signed_commitment_1 = SignedCommitment::decode(&mut &encoded_signed_commitment_1[..]);
 		println!("signed_commitment_1: {:?}", signed_commitment_1);
 
-		let proofs_1 = vec![
+		let validator_proofs_1 = vec![
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde").into(),
+					hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 0,
-				leaf: &alice_pk,
+				leaf: alice_pk.clone(),
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7").into(),
+					hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 1,
-				leaf: &bob_pk,
+				leaf: bob_pk.clone(),
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f").into(),
+					hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 2,
-				leaf: &charlie_pk,
+				leaf: charlie_pk.clone(),
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136").into(),
+					hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 3,
-				leaf: &dave_pk,
+				leaf: dave_pk.clone(),
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![hex!(
-					"a33c1baaa379963ee43c3a7983a3157080c32a462a9774f1fe6d2f0480428e5c"
+					"2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519"
 				)
 				.into()],
 				number_of_leaves: 5,
 				leaf_index: 4,
-				leaf: &eve_pk,
+				leaf: eve_pk.clone(),
 			},
 		];
-		println!("proofs_1: {:?}", proofs_1);
 
 		let  encoded_mmr_leaf_1 = hex!("c501000800000079f0451c096266bee167393545bafc7b27b7d14810084a843955624588ba29c1010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
 
@@ -393,92 +360,81 @@ mod tests {
 		let encoded_mmr_proof_1 =  hex!("0800000000000000090000000000000004c2d6348aef1ef52e779c59bcc1d87fa0175b59b4fa2ea8fc322e4ceb2bdd1ea2");
 		let mmr_proof_1 = MmrLeafProof::decode(&mut &encoded_mmr_proof_1[..]);
 		println!("mmr_proof_1: {:?}", mmr_proof_1);
-		let result = lc
+		assert!(lc
 			.update_state(
 				&encoded_signed_commitment_1,
-				proofs_1,
+				validator_proofs_1,
 				&encoded_mmr_leaf_1,
 				&encoded_mmr_proof_1,
 			)
-			.is_ok();
-		println!("light client: {:?} {}", lc, result);
+			.is_ok());
+		println!("light client: {:?}", lc);
 
 		let encoded_signed_commitment_2 = hex!("8d3cb96dca5110aff60423046bbf4a76db0e71158aa5586ffa3423fbaf9ef1da1100000000000000000000001401864ce4553324cc92db4ac622b9dbb031a6a4bd26ee1ab66e0272f567928865ec46847b55f98fa7e1dbafb0256f0a23e2f0a375e4547f5d1819d9b8694f17f6a80101c9ae8aad1b81e2249736324716c09c122889317e4f3e47066c501a839c15312e5c823dd37436d8e3bac8041329c5d0ed5dd94c45b5c1eed13d9111924f0a13c1000159fe06519c672d183de7776b6902a13c098d917721b5600a2296dca3a74a81bc01031a671fdb5e5050ff1f432d72e7a2c144ab38f8401ffd368e693257162a4600014290c6aa5028ceb3a3a773c80beee2821f3a7f5b43f592f7a82b0cbbbfab5ba41363daae5a7006fea2f89a30b4900f85fa82283587df789fd7b5b773ad7e8c410100");
 		let signed_commitment_2 = SignedCommitment::decode(&mut &encoded_signed_commitment_2[..]);
 		println!("signed_commitment_2: {:?}", signed_commitment_2);
 
-		let proofs_2 = vec![
+		let validator_proofs_2 = vec![
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde").into(),
+					hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 0,
-				leaf: &alice_pk,
+				leaf: alice_pk,
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7").into(),
+					hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 1,
-				leaf: &bob_pk,
+				leaf: bob_pk,
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f").into(),
+					hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 2,
-				leaf: &charlie_pk,
+				leaf: charlie_pk,
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![
-					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136").into(),
+					hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
+					hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
 				],
 				number_of_leaves: 5,
 				leaf_index: 3,
-				leaf: &dave_pk,
+				leaf: dave_pk,
 			},
 			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
+				root: hex!("304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a2")
+					.into(),
 				proof: vec![hex!(
-					"a33c1baaa379963ee43c3a7983a3157080c32a462a9774f1fe6d2f0480428e5c"
+					"2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519"
 				)
 				.into()],
 				number_of_leaves: 5,
 				leaf_index: 4,
-				leaf: &eve_pk,
+				leaf: eve_pk,
 			},
 		];
-		println!("proofs_2: {:?}", proofs_2);
 
 		let  encoded_mmr_leaf_2 = hex!("c5010010000000d0a3a930e5f3b0f997c3794023c86f8ba28c6ba2cacf230d08d46be0fdf29435010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
 
@@ -492,7 +448,7 @@ mod tests {
 		assert!(lc
 			.update_state(
 				&encoded_signed_commitment_2,
-				proofs_2,
+				validator_proofs_2,
 				&encoded_mmr_leaf_2,
 				&encoded_mmr_proof_2,
 			)
@@ -628,5 +584,16 @@ mod tests {
 				&proof.leaf,
 			));
 		}
+	}
+
+	#[test]
+	fn verify_leaf_proof_works() {
+		let root_hash = hex!("aa0b510cee4270257f6362a353262253de422f069826b5af4398377a4eee03f7");
+		let leaf = hex!("c5010058000000e5ac4bf69913974aeb79779c77d6e22d40575a63d4bca9044b501b12916a6090010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
+		let leaf: Vec<u8> = Decode::decode(&mut &leaf[..]).unwrap();
+		let mmr_leaf = MmrLeaf::decode(&mut &leaf[..]).unwrap();
+		let proof = hex!("580000000000000059000000000000000c638bedc14bfdb5cfb8eb7313f311859820948868afbaa340de2a467f4eec130cd789e49d14c7068ec08e0b5680c5e01b372d28802acaeba7b63a5e1482d5147c0e395b48e5a134164c4dac0b30fc8bfd56756329824e6c70c7325769c92c1ff8");
+		let mmr_proof = MmrLeafProof::decode(&mut &proof[..]).unwrap();
+		assert_eq!(mmr::verify_leaf_proof(root_hash, mmr_leaf.hash(), mmr_proof), Ok(true));
 	}
 }

@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use core::convert::Into;
 
 use crate::BeefyNextAuthoritySet;
-use beefy_merkle_tree::{Hash, Keccak256, Leaf};
+use beefy_merkle_tree::{Hash, Keccak256};
 use codec::{Decode, Encode};
 
 #[derive(Clone, Debug, Default, Encode, Decode)]
@@ -49,12 +49,6 @@ pub struct MmrLeaf {
 impl MmrLeaf {
 	pub fn hash(&self) -> Hash {
 		Keccak256::hash(&self.encode())
-	}
-}
-
-impl<'a> From<MmrLeaf> for Leaf<'a> {
-	fn from(v: MmrLeaf) -> Self {
-		Leaf::Hash(v.hash())
 	}
 }
 
@@ -104,20 +98,6 @@ impl NodesUtils {
 		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
 	}
 }
-pub fn leaf_index_to_pos(index: u64) -> u64 {
-	// mmr_size - H - 1, H is the height(intervals) of last peak
-	leaf_index_to_mmr_size(index) - (index + 1).trailing_zeros() as u64 - 1
-}
-
-pub fn leaf_index_to_mmr_size(index: u64) -> u64 {
-	// leaf index start with 0
-	let leaves_count = index + 1;
-
-	// the peak count(k) is actually the count of 1 in leaves count's binary representation
-	let peak_count = leaves_count.count_ones() as u64;
-
-	2 * leaves_count - peak_count
-}
 
 struct HashMerger;
 
@@ -140,7 +120,7 @@ pub fn verify_leaf_proof(
 	proof: MmrLeafProof,
 ) -> Result<bool, crate::Error> {
 	let size = NodesUtils::new(proof.leaf_count).size();
-	let leaf_position = leaf_index_to_pos(proof.leaf_index);
+	let leaf_position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
 
 	let p = mmr_lib::MerkleProof::<Hash, HashMerger>::new(size, proof.items);
 	p.verify(root, vec![(leaf_position, leaf_hash)])

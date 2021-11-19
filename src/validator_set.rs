@@ -5,8 +5,6 @@ use codec::{Decode, Encode};
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
-pub type Public = [u8; 33];
-
 #[derive(Clone, Debug, Default, Encode, Decode, BorshDeserialize, BorshSerialize)]
 pub struct BeefyNextAuthoritySet {
 	/// Id of the next set.
