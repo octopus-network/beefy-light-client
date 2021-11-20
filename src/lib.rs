@@ -134,28 +134,37 @@ impl LightClient {
 			}
 		}
 
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = mmr_leaf.hash();
+		let signatures_count =
+			signed_commitment.signatures.iter().filter(|&sig| sig.is_some()).count();
+		if signatures_count < (self.validator_set.len / 2) as usize {
+			return Err(Error::InvalidNumberOfSignatures {
+				expected: (self.validator_set.len / 2) as usize,
+				got: signatures_count,
+			});
+		}
+
+		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
 
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
-
-		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
-		// update the latest commitment, including mmr_root
-		self.latest_commitment = Some(commitment);
-
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let result = mmr::verify_leaf_proof(commitment.payload, mmr_leaf_hash, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof);
 		}
 
+		// update the latest commitment, including mmr_root
+		self.latest_commitment = Some(commitment);
+
 		// update validator_set
 		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
 			self.validator_set = mmr_leaf.beefy_next_authority_set;
 		}
+
 		Ok(())
 	}
 
@@ -166,22 +175,22 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = mmr_leaf.hash();
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-
 		let header_digest = header.get_other().ok_or(Error::DigestNotFound)?;
 
 		let messages_hash = Keccak256::hash(messages);
-		// if messages_hash != &header_digest[..] {
-		// 	return Err(Error::DigestNotMatch);
-		// }
+		if messages_hash != &header_digest[..] {
+			return Err(Error::DigestNotMatch);
+		}
+
+		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
+		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
+			.map_err(|_| Error::CantDecodeMmrProof)?;
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
 
 		let header_hash = header.hash();
 		if header_hash != mmr_leaf.parent_number_and_hash.1 {
@@ -205,7 +214,6 @@ impl LightClient {
 		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
 	) -> Result<Commitment, Error> {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
-		// TODO: check length
 		let commitment_hash = commitment.hash();
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
@@ -387,9 +395,9 @@ mod tests {
 		let root_hash = hex!("aa0b510cee4270257f6362a353262253de422f069826b5af4398377a4eee03f7");
 		let leaf = hex!("c5010058000000e5ac4bf69913974aeb79779c77d6e22d40575a63d4bca9044b501b12916a6090010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
 		let leaf: Vec<u8> = Decode::decode(&mut &leaf[..]).unwrap();
-		let mmr_leaf = MmrLeaf::decode(&mut &leaf[..]).unwrap();
+		let mmr_leaf_hash = Keccak256::hash(&leaf[..]);
 		let proof = hex!("580000000000000059000000000000000c638bedc14bfdb5cfb8eb7313f311859820948868afbaa340de2a467f4eec130cd789e49d14c7068ec08e0b5680c5e01b372d28802acaeba7b63a5e1482d5147c0e395b48e5a134164c4dac0b30fc8bfd56756329824e6c70c7325769c92c1ff8");
 		let mmr_proof = MmrLeafProof::decode(&mut &proof[..]).unwrap();
-		assert_eq!(mmr::verify_leaf_proof(root_hash, mmr_leaf.hash(), mmr_proof), Ok(true));
+		assert_eq!(mmr::verify_leaf_proof(root_hash, mmr_leaf_hash, mmr_proof), Ok(true));
 	}
 }

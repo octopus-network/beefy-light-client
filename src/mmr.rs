@@ -46,12 +46,6 @@ pub struct MmrLeaf {
 	pub parachain_heads: Hash,
 }
 
-impl MmrLeaf {
-	pub fn hash(&self) -> Hash {
-		Keccak256::hash(&self.encode())
-	}
-}
-
 /// A MMR proof data for one of the leaves.
 #[derive(Debug, Clone, Default, Encode, Decode)]
 pub struct MmrLeafProof {
