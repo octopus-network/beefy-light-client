@@ -11,11 +11,11 @@ use std::cmp;
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ByteOrder, LittleEndian};
-use codec::Decode;
+use codec::{Decode, Encode};
 use core::convert::TryInto;
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Debug, Decode, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode)]
 pub struct Signature(pub [u8; 65]);
 
 impl From<&str> for Signature {
@@ -26,7 +26,7 @@ impl From<&str> for Signature {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize)]
 pub struct Commitment {
 	pub payload: Hash,
 	pub block_number: u64,
@@ -57,7 +57,7 @@ impl Commitment {
 	}
 }
 
-#[derive(Debug, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct SignedCommitment {
 	pub commitment: Commitment,
 	pub signatures: Vec<Option<Signature>>,

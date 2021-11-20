@@ -92,7 +92,7 @@ pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
 	pub latest_commitment: Option<Commitment>,
-	validator_set: BeefyNextAuthoritySet,
+	pub validator_set: BeefyNextAuthoritySet,
 }
 
 // Initialize light client using the BeefyId of the initial validator set.
