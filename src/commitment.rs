@@ -33,7 +33,7 @@ impl From<&str> for Signature {
 }
 
 #[derive(
-	Debug, Default, Clone, Copy, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize,
+	Debug, Default, Clone, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize,
 )]
 pub struct Commitment {
 	pub payload: Hash,
