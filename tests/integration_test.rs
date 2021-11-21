@@ -5,7 +5,7 @@ use beefy_light_client::{
 	mmr::{MmrLeaf, MmrLeafProof},
 	new,
 	validator_set::BeefyNextAuthoritySet,
-	MerkleProof,
+	MerkleProof, ValidatorMerkleProof,
 };
 use beefy_merkle_tree::{merkle_proof, merkle_root, Keccak256};
 use codec::{Decode, Encode};
@@ -381,7 +381,13 @@ fn update_state_in_multiple_steps() {
 	};
 	let mut validator_proofs = Vec::new();
 	for i in 0..initial_public_keys.len() {
-		validator_proofs.push(merkle_proof::<Keccak256, _, _>(initial_public_keys.clone(), i));
+		let proof = merkle_proof::<Keccak256, _, _>(initial_public_keys.clone(), i);
+		validator_proofs.push(ValidatorMerkleProof {
+			proof: proof.proof.clone(),
+			number_of_leaves: proof.number_of_leaves,
+			leaf_index: proof.leaf_index,
+			leaf: proof.leaf,
+		});
 	}
 
 	println!("lc: {:?}", lc);

@@ -203,7 +203,7 @@ impl LightClient {
 	pub fn start_updating_state(
 		&mut self,
 		signed_commitment: &[u8],
-		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
+		validator_proofs: Vec<ValidatorMerkleProof>,
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
@@ -241,15 +241,7 @@ impl LightClient {
 		self.in_process_state = Some(InProcessState {
 			position: 0,
 			signed_commitment,
-			validator_proofs: validator_proofs
-				.iter()
-				.map(|proof| ValidatorMerkleProof {
-					proof: proof.proof.clone(),
-					number_of_leaves: proof.number_of_leaves,
-					leaf_index: proof.leaf_index,
-					leaf: proof.leaf.clone(),
-				})
-				.collect(),
+			validator_proofs,
 			validator_set: mmr_leaf.beefy_next_authority_set,
 		});
 
