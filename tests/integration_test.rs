@@ -339,3 +339,72 @@ fn maximum_validators_test() {
 		.is_ok());
 	println!("lc: {:?}", lc);
 }
+
+#[test]
+fn update_state_in_multiple_steps() {
+	const MAX_VALIDATORS: i32 = 100;
+
+	let secp = Secp256k1::new();
+
+	let mut initial_public_keys = Vec::new();
+	let commitment = Commitment {
+		payload: hex!("f45927644a0b5bc6f1ce667330071fbaea498403c084eb0d4cb747114887345d"),
+		block_number: 9,
+		validator_set_id: 0,
+	};
+	let commitment_hash = commitment.hash();
+	let msg = SecpMessage::from_slice(&commitment_hash[..]).unwrap();
+	let mut signed_commitment = SignedCommitment { commitment, signatures: vec![] };
+
+	for _ in 0..MAX_VALIDATORS {
+		let (privkey, pubkey) = secp.generate_keypair(&mut thread_rng());
+		// println!("pubkey: {:?}", pubkey);
+		// println!("prikey: {:?}", privkey);
+		let validator_address = beefy_ecdsa_to_ethereum(&pubkey.serialize());
+		// println!("validator_address: {:?}", validator_address);
+		initial_public_keys.push(validator_address);
+		let (recover_id, signature) = secp.sign_recoverable(&msg, &privkey).serialize_compact();
+
+		let mut buf = [0_u8; 65];
+		buf[0..64].copy_from_slice(&signature[..]);
+		buf[64] = recover_id.to_i32() as u8;
+
+		signed_commitment.signatures.push(Some(Signature(buf)));
+	}
+	let encoded_signed_commitment = signed_commitment.encode();
+
+	let mut lc = new(vec!["0x00".to_string()]);
+	lc.validator_set = BeefyNextAuthoritySet {
+		id: 0,
+		len: initial_public_keys.len() as u32,
+		root: merkle_root::<Keccak256, _, _>(initial_public_keys.clone()),
+	};
+	let mut validator_proofs = Vec::new();
+	for i in 0..initial_public_keys.len() {
+		validator_proofs.push(merkle_proof::<Keccak256, _, _>(initial_public_keys.clone(), i));
+	}
+
+	println!("lc: {:?}", lc);
+	let  encoded_mmr_leaf = hex!("c501000800000079f0451c096266bee167393545bafc7b27b7d14810084a843955624588ba29c1010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
+	let encoded_mmr_proof =  hex!("0800000000000000090000000000000004c2d6348aef1ef52e779c59bcc1d87fa0175b59b4fa2ea8fc322e4ceb2bdd1ea2");
+	assert!(lc
+		.start_updating_state(
+			&encoded_signed_commitment,
+			validator_proofs,
+			&encoded_mmr_leaf,
+			&encoded_mmr_proof,
+		)
+		.is_ok());
+	println!("lc: {:?}", lc);
+	loop {
+		let result = lc.complete_updating_state(9);
+		if let Some(ref in_process_state) = lc.in_process_state {
+			println!("iteration: {:?}", in_process_state.position);
+		}
+		assert!(result.is_ok());
+		if result == Ok(true) {
+			break;
+		}
+	}
+	println!("lc: {:?}", lc);
+}
