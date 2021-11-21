@@ -13,12 +13,12 @@ use core::result;
 use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
-use commitment::{Commitment, SignedCommitment};
+use commitment::{Commitment, Signature, SignedCommitment};
 use header::Header;
 use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
 
-pub use beefy_merkle_tree::MerkleProof;
+pub use beefy_merkle_tree::{Hash, MerkleProof};
 
 pub mod commitment;
 pub mod header;
@@ -75,7 +75,10 @@ pub enum Error {
 	CommitmentAlreadyUpdated,
 	///
 	ValidatorNotFound,
+	///
+	MissingInProcessState,
 }
+
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
 	libsecp256k1::PublicKey::parse_slice(
@@ -89,10 +92,38 @@ pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
 	.unwrap_or_default()
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
+pub struct ValidatorMerkleProof {
+	/// Proof items (does not contain the leaf hash, nor the root obviously).
+	///
+	/// This vec contains all inner node hashes necessary to reconstruct the root hash given the
+	/// leaf hash.
+	pub proof: Vec<Hash>,
+	/// Number of leaves in the original tree.
+	///
+	/// This is needed to detect a case where we have an odd number of leaves that "get promoted"
+	/// to upper layers.
+	pub number_of_leaves: usize,
+	/// Index of the leaf the proof is for (0-based).
+	pub leaf_index: usize,
+	/// Leaf content.
+	pub leaf: Vec<u8>,
+}
+
+#[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
+pub struct InProcessState {
+	pub position: usize,
+	commitment_hash: Hash,
+	signed_commitment: SignedCommitment,
+	validator_proofs: Vec<ValidatorMerkleProof>,
+	validator_set: BeefyNextAuthoritySet,
+}
+
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
 	pub latest_commitment: Option<Commitment>,
 	pub validator_set: BeefyNextAuthoritySet,
+	pub in_process_state: Option<InProcessState>,
 }
 
 // Initialize light client using the BeefyId of the initial validator set.
@@ -113,6 +144,7 @@ pub fn new(initial_public_keys: Vec<String>) -> LightClient {
 			len: initial_public_keys.len() as u32,
 			root: merkle_root::<Keccak256, _, _>(initial_public_keys),
 		},
+		in_process_state: None,
 	}
 }
 
@@ -121,7 +153,7 @@ impl LightClient {
 	pub fn update_state(
 		&mut self,
 		signed_commitment: &[u8],
-		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
+		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
@@ -143,7 +175,16 @@ impl LightClient {
 			});
 		}
 
-		let commitment = self.verify_commitment(signed_commitment, validator_proofs)?;
+		let SignedCommitment { commitment, signatures } = signed_commitment;
+		let commitment_hash = commitment.hash();
+		LightClient::verify_commitment_signatures(
+			&commitment_hash,
+			&signatures,
+			&self.validator_set.root,
+			&validator_proofs,
+			0,
+			signatures.len(),
+		)?;
 
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
@@ -168,6 +209,109 @@ impl LightClient {
 		Ok(())
 	}
 
+	// Import a signed commitment and verify signatures in multiple steps.
+	pub fn start_updating_state(
+		&mut self,
+		signed_commitment: &[u8],
+		validator_proofs: &[ValidatorMerkleProof],
+		mmr_leaf: &[u8],
+		mmr_proof: &[u8],
+	) -> Result<(), Error> {
+		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
+			.map_err(|_| Error::InvalidSignedCommitment)?;
+
+		if let Some(latest_commitment) = &self.latest_commitment {
+			if signed_commitment.commitment <= *latest_commitment {
+				return Err(Error::CommitmentAlreadyUpdated);
+			}
+		}
+
+		let signatures_count =
+			signed_commitment.signatures.iter().filter(|&sig| sig.is_some()).count();
+		if signatures_count < (self.validator_set.len / 2) as usize {
+			return Err(Error::InvalidNumberOfSignatures {
+				expected: (self.validator_set.len / 2) as usize,
+				got: signatures_count,
+			});
+		}
+
+		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
+			.map_err(|_| Error::CantDecodeMmrProof)?;
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let result =
+			mmr::verify_leaf_proof(signed_commitment.commitment.payload, mmr_leaf_hash, mmr_proof)?;
+		if !result {
+			return Err(Error::InvalidMmrLeafProof);
+		}
+
+		let commitment_hash = signed_commitment.commitment.hash();
+
+		self.in_process_state = Some(InProcessState {
+			position: 0,
+			commitment_hash,
+			signed_commitment,
+			validator_proofs: validator_proofs.to_vec(),
+			validator_set: mmr_leaf.beefy_next_authority_set,
+		});
+
+		Ok(())
+	}
+
+	pub fn complete_updating_state(&mut self, iterations: usize) -> Result<bool, Error> {
+		let in_process_state =
+			self.in_process_state.as_mut().ok_or(Error::MissingInProcessState)?;
+		if in_process_state.position >= in_process_state.signed_commitment.signatures.len() {
+			// discard the state
+			self.in_process_state = None;
+			return Ok(true);
+		}
+		let iterations = if in_process_state.position + iterations
+			> in_process_state.signed_commitment.signatures.len()
+		{
+			in_process_state.signed_commitment.signatures.len() - in_process_state.position
+		} else {
+			iterations
+		};
+		let result = LightClient::verify_commitment_signatures(
+			&in_process_state.commitment_hash,
+			&in_process_state.signed_commitment.signatures,
+			&self.validator_set.root,
+			&in_process_state.validator_proofs,
+			in_process_state.position,
+			iterations,
+		);
+		match result {
+			Ok(_) => {
+				in_process_state.position += iterations;
+				if in_process_state.position >= in_process_state.signed_commitment.signatures.len()
+				{
+					// update the latest commitment, including mmr_root
+					self.latest_commitment =
+						Some(in_process_state.signed_commitment.commitment.clone());
+
+					// update validator_set
+					if in_process_state.validator_set.id > self.validator_set.id {
+						self.validator_set = in_process_state.validator_set.clone();
+					}
+					// discard the state
+					self.in_process_state = None;
+					return Ok(true);
+				} else {
+					return Ok(false);
+				}
+			}
+			Err(_) => {
+				// discard the state
+				self.in_process_state = None;
+				return Err(Error::InvalidSignature);
+			}
+		}
+	}
+
 	pub fn verify_solochain_messages(
 		&self,
 		messages: &[u8],
@@ -183,7 +327,8 @@ impl LightClient {
 			return Err(Error::DigestNotMatch);
 		}
 
-		let mmr_root = self.latest_commitment.ok_or(Error::MissingLatestCommitment)?.payload;
+		let mmr_root =
+			self.latest_commitment.as_ref().ok_or(Error::MissingLatestCommitment)?.payload;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let mmr_leaf: Vec<u8> =
@@ -208,16 +353,17 @@ impl LightClient {
 		Ok(())
 	}
 
-	fn verify_commitment(
-		&self,
-		signed_commitment: SignedCommitment,
-		validator_proofs: Vec<MerkleProof<Vec<u8>>>,
-	) -> Result<Commitment, Error> {
-		let SignedCommitment { commitment, signatures } = signed_commitment;
-		let commitment_hash = commitment.hash();
+	fn verify_commitment_signatures(
+		commitment_hash: &Hash,
+		signatures: &[Option<Signature>],
+		validator_set_root: &Hash,
+		validator_proofs: &[ValidatorMerkleProof],
+		start_position: usize,
+		interations: usize,
+	) -> Result<(), Error> {
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
-		for signature in signatures.into_iter() {
+		for signature in signatures.into_iter().skip(start_position).take(interations) {
 			if let Some(signature) = signature {
 				let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64])
 					.or(Err(Error::InvalidSignature))?;
@@ -233,7 +379,7 @@ impl LightClient {
 					if validator_address == *proof.leaf {
 						found = true;
 						if !verify_proof::<Keccak256, _, _>(
-							&self.validator_set.root,
+							&validator_set_root,
 							proof.proof.clone(),
 							proof.number_of_leaves,
 							proof.leaf_index,
@@ -250,7 +396,18 @@ impl LightClient {
 			}
 		}
 
-		Ok(commitment)
+		Ok(())
+	}
+	//
+	pub fn get_latest_commitment(&self) -> Option<Commitment> {
+		match &self.latest_commitment {
+			Some(commitment) => Some(commitment.clone()),
+			None => None,
+		}
+	}
+	//
+	pub fn is_updating_state(&self) -> bool {
+		self.in_process_state.is_some()
 	}
 }
 

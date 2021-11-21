@@ -15,8 +15,14 @@ use codec::{Decode, Encode};
 use core::convert::TryInto;
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize)]
 pub struct Signature(pub [u8; 65]);
+
+impl Default for Signature {
+	fn default() -> Self {
+		Signature([0; 65])
+	}
+}
 
 impl From<&str> for Signature {
 	fn from(hex_str: &str) -> Self {
@@ -26,7 +32,9 @@ impl From<&str> for Signature {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(
+	Debug, Default, Clone, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize,
+)]
 pub struct Commitment {
 	pub payload: Hash,
 	pub block_number: u64,
@@ -57,7 +65,7 @@ impl Commitment {
 	}
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Default, Clone, Encode, Decode, BorshDeserialize, BorshSerialize)]
 pub struct SignedCommitment {
 	pub commitment: Commitment,
 	pub signatures: Vec<Option<Signature>>,
