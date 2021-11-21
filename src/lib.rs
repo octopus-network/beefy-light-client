@@ -264,7 +264,9 @@ impl LightClient {
 	pub fn complete_updating_state(&mut self, iterations: usize) -> Result<bool, Error> {
 		let in_process_state =
 			self.in_process_state.as_mut().ok_or(Error::MissingInProcessState)?;
-		if in_process_state.position + 1 >= in_process_state.signed_commitment.signatures.len() {
+		if in_process_state.position >= in_process_state.signed_commitment.signatures.len() {
+			// discard the state
+			self.in_process_state = None;
 			return Ok(true);
 		}
 		let iterations = if in_process_state.position + iterations
@@ -285,8 +287,7 @@ impl LightClient {
 		match result {
 			Ok(_) => {
 				in_process_state.position += iterations;
-				if in_process_state.position + 1
-					>= in_process_state.signed_commitment.signatures.len()
+				if in_process_state.position >= in_process_state.signed_commitment.signatures.len()
 				{
 					// update the latest commitment, including mmr_root
 					self.latest_commitment =

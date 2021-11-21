@@ -397,12 +397,12 @@ fn update_state_in_multiple_steps() {
 			&encoded_mmr_proof,
 		)
 		.is_ok());
-	println!("lc: {:?}", lc);
+	// println!("lc: {:?}", lc);
 	loop {
-		let result = lc.complete_updating_state(9);
 		if let Some(ref in_process_state) = lc.in_process_state {
-			println!("iteration: {:?}", in_process_state.position);
+			println!("position: {:?}", in_process_state.position);
 		}
+		let result = lc.complete_updating_state(9);
 		assert!(result.is_ok());
 		if result == Ok(true) {
 			break;
