@@ -398,6 +398,17 @@ impl LightClient {
 
 		Ok(())
 	}
+	//
+	pub fn get_latest_commitment(&self) -> Option<Commitment> {
+		match &self.latest_commitment {
+			Some(commitment) => Some(commitment.clone()),
+			None => None,
+		}
+	}
+	//
+	pub fn is_updating_state(&self) -> bool {
+		self.in_process_state.is_some()
+	}
 }
 
 #[cfg(test)]
