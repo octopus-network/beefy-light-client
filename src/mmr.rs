@@ -2,8 +2,6 @@
 use alloc::vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-#[cfg(not(feature = "std"))]
-use core::convert::Into;
 
 use crate::BeefyNextAuthoritySet;
 use beefy_merkle_tree::{Hash, Keccak256};
@@ -333,7 +331,7 @@ mod tests {
 		];
 
 		for i in 0..leaves.len() {
-			assert_eq!(verify_leaf_proof(root, leaves[i].clone(), proofs[i].clone()).is_ok(), true);
+			assert_eq!(verify_leaf_proof(root, leaves[i].clone(), proofs[i].clone()), Ok(true));
 		}
 	}
 }

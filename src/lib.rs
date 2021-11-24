@@ -7,8 +7,6 @@ extern crate alloc;
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-#[cfg(not(feature = "std"))]
-use core::result;
 
 use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
