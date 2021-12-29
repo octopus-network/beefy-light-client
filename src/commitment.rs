@@ -35,8 +35,8 @@ impl From<&str> for Signature {
 )]
 pub struct Commitment {
 	pub payload: Hash,
-	pub block_number: u64,
-	pub validator_set_id: u32,
+	pub block_number: u32,
+	pub validator_set_id: u64,
 }
 
 impl cmp::PartialOrd for Commitment {
@@ -57,8 +57,8 @@ impl Commitment {
 	pub fn hash(&self) -> Hash {
 		let mut buf = [0_u8; 44];
 		buf[0..32].copy_from_slice(&self.payload);
-		LittleEndian::write_u64(&mut buf[32..40], self.block_number);
-		LittleEndian::write_u32(&mut buf[40..44], self.validator_set_id);
+		LittleEndian::write_u32(&mut buf[32..36], self.block_number);
+		LittleEndian::write_u64(&mut buf[36..44], self.validator_set_id);
 		Keccak256::hash(&buf)
 	}
 }
@@ -92,7 +92,7 @@ mod tests {
 
 	#[test]
 	fn commitment_ordering() {
-		fn commitment(block_number: u64, validator_set_id: u32) -> Commitment {
+		fn commitment(block_number: u32, validator_set_id: u64) -> Commitment {
 			Commitment { payload: Hash::default(), block_number, validator_set_id }
 		}
 
