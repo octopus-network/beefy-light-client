@@ -5,7 +5,7 @@ authors = ["Julian Sun <julian@oct.network>"]
 edition = "2018"
 
 [dependencies]
-borsh = "0.8.1"
+borsh =  { version = "0.8.1", default-features = false }
 beefy-merkle-tree = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", features = ["keccak"], default-features = false }
 blake2-rfc = { version = "0.2.18", default-features = false }
 byteorder = { version = "1", default-features = false }
@@ -30,4 +30,5 @@ std = [
 	"hex/std",
 	"libsecp256k1/std",
 	"mmr-lib/std",
+	"borsh/std",
 ]
