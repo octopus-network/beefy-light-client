@@ -3,8 +3,8 @@ use alloc::vec::Vec;
 
 use beefy_merkle_tree::Hash;
 use codec::{Decode, Encode, Error, Input};
-use sp_runtime::traits::BlakeTwo256;
 use sp_core::H256;
+use sp_runtime::traits::BlakeTwo256;
 
 /// Do a Blake2 256-bit hash and place result in `dest`.
 fn blake2_256_into(data: &[u8], dest: &mut [u8; 32]) {
@@ -47,7 +47,7 @@ impl Header {
 }
 
 impl From<sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>> for Header {
-	fn from(raw_header : sp_runtime::generic::Header<u32, BlakeTwo256>) -> Self {
+	fn from(raw_header: sp_runtime::generic::Header<u32, BlakeTwo256>) -> Self {
 		Self {
 			parent_hash: Hash::from(raw_header.parent_hash),
 			number: raw_header.number,
@@ -65,10 +65,8 @@ pub struct Digest {
 }
 
 impl From<sp_runtime::Digest<H256>> for Digest {
-	fn from(value : sp_runtime::Digest<H256>) -> Self {
-		Self {
-			logs: value.logs.into_iter().map(|value| value.into()).collect(),
-		}
+	fn from(value: sp_runtime::Digest<H256>) -> Self {
+		Self { logs: value.logs.into_iter().map(|value| value.into()).collect() }
 	}
 }
 
@@ -122,15 +120,27 @@ pub enum DigestItem {
 }
 
 impl From<sp_runtime::DigestItem<H256>> for DigestItem {
-	fn from(value : sp_runtime::DigestItem<H256>) -> Self {
+	fn from(value: sp_runtime::DigestItem<H256>) -> Self {
 		match value {
-			sp_runtime::DigestItem::ChangesTrieRoot(hash) => { DigestItem::ChangesTrieRoot(Hash::from(hash)) },
-			sp_runtime::DigestItem::PreRuntime(consensus_engine_id, value) => { DigestItem::PreRuntime(consensus_engine_id, value) },
-			sp_runtime::DigestItem::Consensus(consensus_engine_id, value) => { DigestItem::Consensus(consensus_engine_id, value) },
-			sp_runtime::DigestItem::Seal(consensus_engine_id, value) => { DigestItem::Seal(consensus_engine_id, value) },
-			sp_runtime::DigestItem::ChangesTrieSignal(changes_trie_signal) => { DigestItem::ChangesTrieSignal(changes_trie_signal.into()) },
-			sp_runtime::DigestItem::Other(value ) => { DigestItem::Other(value) },
-			sp_runtime::DigestItem::RuntimeEnvironmentUpdated => { DigestItem::RuntimeEnvironmentUpdated },
+			sp_runtime::DigestItem::ChangesTrieRoot(hash) => {
+				DigestItem::ChangesTrieRoot(Hash::from(hash))
+			}
+			sp_runtime::DigestItem::PreRuntime(consensus_engine_id, value) => {
+				DigestItem::PreRuntime(consensus_engine_id, value)
+			}
+			sp_runtime::DigestItem::Consensus(consensus_engine_id, value) => {
+				DigestItem::Consensus(consensus_engine_id, value)
+			}
+			sp_runtime::DigestItem::Seal(consensus_engine_id, value) => {
+				DigestItem::Seal(consensus_engine_id, value)
+			}
+			sp_runtime::DigestItem::ChangesTrieSignal(changes_trie_signal) => {
+				DigestItem::ChangesTrieSignal(changes_trie_signal.into())
+			}
+			sp_runtime::DigestItem::Other(value) => DigestItem::Other(value),
+			sp_runtime::DigestItem::RuntimeEnvironmentUpdated => {
+				DigestItem::RuntimeEnvironmentUpdated
+			}
 		}
 	}
 }
@@ -180,12 +190,9 @@ pub struct ChangesTrieConfiguration {
 }
 
 // the trait `From<sp_core::ChangesTrieConfiguration>` is not implemented for `std::option::Option<header::ChangesTrieConfiguration>`
-impl From<sp_core::ChangesTrieConfiguration>  for ChangesTrieConfiguration {
-	fn from(value : sp_core::ChangesTrieConfiguration) -> Self {
-		Self {
-			digest_interval: value.digest_interval,
-			digest_levels: value.digest_levels,
-		}
+impl From<sp_core::ChangesTrieConfiguration> for ChangesTrieConfiguration {
+	fn from(value: sp_core::ChangesTrieConfiguration) -> Self {
+		Self { digest_interval: value.digest_interval, digest_levels: value.digest_levels }
 	}
 }
 
