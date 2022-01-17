@@ -8,7 +8,7 @@ use beefy_merkle_tree::{Hash, Keccak256};
 use codec::{Decode, Encode};
 
 #[derive(Clone, Debug, Default, Encode, Decode)]
-pub struct MmrLeafVersion(u8);
+pub struct MmrLeafVersion(pub u8);
 impl MmrLeafVersion {
 	/// Create new version object from `major` and `minor` components.
 	///
