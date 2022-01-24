@@ -186,20 +186,21 @@ impl LightClient {
 
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
-		println!("beefy_light_client::update_state:mmr_proof is {:?}", mmr_proof);
+		// println!("beefy_light_client::update_state:mmr_proof is {:?}", mmr_proof);
 
 		let mmr_leaf: Vec<u8> =
 			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		println!("beefy_light_client::update_state:mmr_leaf_bytes is {:?}", hex::encode(&mmr_leaf));
+		// println!("beefy_light_client::update_state:mmr_leaf_bytes is {:?}", hex::encode(&mmr_leaf));
+
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		println!(
-			"beefy_light_client::update_state:mmr_leaf_hash is {:?}",
-			hex::encode(&mmr_leaf_hash)
-		);
+		// println!(
+		// 	"beefy_light_client::update_state:mmr_leaf_hash is {:?}",
+		// 	hex::encode(&mmr_leaf_hash)
+		// );
 
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		println!("beefy_light_client::update_state:mmr_leaf is {:?}", mmr_leaf);
+		// println!("beefy_light_client::update_state:mmr_leaf is {:?}", mmr_leaf);
 
 		let result = mmr::verify_leaf_proof(commitment.payload, mmr_leaf_hash, mmr_proof)?;
 		if !result {
@@ -371,16 +372,16 @@ impl LightClient {
 	) -> Result<(), Error> {
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
-		println!("verify_commitment_signatures:commiment msg is {:?}", msg);
+		// println!("verify_commitment_signatures:commiment msg is {:?}", msg);
 		for signature in signatures.into_iter().skip(start_position).take(interations) {
 			if let Some(signature) = signature {
 				let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64])
 					.or(Err(Error::InvalidSignature))?;
-				println!("verify_commitment_signatures:signature is {:?}", sig);
+				// println!("verify_commitment_signatures:signature is {:?}", sig);
 
 				let recovery_id = libsecp256k1::RecoveryId::parse(signature.0[64])
 					.or(Err(Error::InvalidRecoveryId))?;
-				println!("verify_commitment_signatures:recovery_id is {:?}", recovery_id);
+				// println!("verify_commitment_signatures:recovery_id is {:?}", recovery_id);
 
 				let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
 					.or(Err(Error::WrongSignature))?
@@ -388,18 +389,18 @@ impl LightClient {
 					.to_vec();
 
 				let validator_address = Keccak256::hash(&validator[1..])[12..].to_vec();
-				println!(
-					"verify_commitment_signatures:validator_address is {:?}",
-					hex::encode(&validator_address)
-				);
+				// println!(
+				// 	"verify_commitment_signatures:validator_address is {:?}",
+				// 	hex::encode(&validator_address)
+				// );
 
 				let mut found = false;
 				for proof in validator_proofs.iter() {
 					if validator_address == *proof.leaf {
-						println!(
-							"verify_commitment_signatures:proof.leaf is {:?}",
-							hex::encode(&proof.leaf)
-						);
+						// println!(
+						// 	"verify_commitment_signatures:proof.leaf is {:?}",
+						// 	hex::encode(&proof.leaf)
+						// );
 						found = true;
 						if !verify_proof::<Keccak256, _, _>(
 							&validator_set_root,
