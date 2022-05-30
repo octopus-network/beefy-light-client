@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(clippy::unnecessary_cast)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -179,7 +180,7 @@ impl LightClient {
 			&commitment_hash,
 			&signatures,
 			&self.validator_set.root,
-			&validator_proofs,
+			validator_proofs,
 			0,
 			signatures.len(),
 		)?;
@@ -297,15 +298,17 @@ impl LightClient {
 					}
 					// discard the state
 					self.in_process_state = None;
-					return Ok(true)
+
+					Ok(true)
 				} else {
-					return Ok(false)
+					Ok(false)
 				}
 			},
 			Err(_) => {
 				// discard the state
 				self.in_process_state = None;
-				return Err(Error::InvalidSignature)
+
+				Err(Error::InvalidSignature)
 			},
 		}
 	}
@@ -321,7 +324,7 @@ impl LightClient {
 		let header_digest = header.get_other().ok_or(Error::DigestNotFound)?;
 
 		let messages_hash = Keccak256::hash(messages);
-		if messages_hash != &header_digest[..] {
+		if messages_hash != header_digest[..] {
 			return Err(Error::DigestNotMatch)
 		}
 
@@ -361,36 +364,34 @@ impl LightClient {
 	) -> Result<(), Error> {
 		let msg = libsecp256k1::Message::parse_slice(&commitment_hash[..])
 			.or(Err(Error::InvalidMessage))?;
-		for signature in signatures.into_iter().skip(start_position).take(interations) {
-			if let Some(signature) = signature {
-				let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64])
-					.or(Err(Error::InvalidSignature))?;
-				let recovery_id = libsecp256k1::RecoveryId::parse(signature.0[64])
-					.or(Err(Error::InvalidRecoveryId))?;
-				let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
-					.or(Err(Error::WrongSignature))?
-					.serialize()
-					.to_vec();
-				let validator_address = Keccak256::hash(&validator[1..])[12..].to_vec();
-				let mut found = false;
-				for proof in validator_proofs.iter() {
-					if validator_address == *proof.leaf {
-						found = true;
-						if !verify_proof::<Keccak256, _, _>(
-							&validator_set_root,
-							proof.proof.clone(),
-							proof.number_of_leaves,
-							proof.leaf_index,
-							&proof.leaf,
-						) {
-							return Err(Error::InvalidValidatorProof)
-						}
-						break
+		for signature in signatures.iter().skip(start_position).take(interations).flatten() {
+			let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64])
+				.or(Err(Error::InvalidSignature))?;
+			let recovery_id = libsecp256k1::RecoveryId::parse(signature.0[64])
+				.or(Err(Error::InvalidRecoveryId))?;
+			let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
+				.or(Err(Error::WrongSignature))?
+				.serialize()
+				.to_vec();
+			let validator_address = Keccak256::hash(&validator[1..])[12..].to_vec();
+			let mut found = false;
+			for proof in validator_proofs.iter() {
+				if validator_address == *proof.leaf {
+					found = true;
+					if !verify_proof::<Keccak256, _, _>(
+						validator_set_root,
+						proof.proof.clone(),
+						proof.number_of_leaves,
+						proof.leaf_index,
+						&proof.leaf,
+					) {
+						return Err(Error::InvalidValidatorProof)
 					}
+					break
 				}
-				if !found {
-					return Err(Error::ValidatorNotFound)
-				}
+			}
+			if !found {
+				return Err(Error::ValidatorNotFound)
 			}
 		}
 
@@ -398,10 +399,7 @@ impl LightClient {
 	}
 	//
 	pub fn get_latest_commitment(&self) -> Option<Commitment> {
-		match &self.latest_commitment {
-			Some(commitment) => Some(commitment.clone()),
-			None => None,
-		}
+		self.latest_commitment.as_ref().cloned()
 	}
 	//
 	pub fn is_updating_state(&self) -> bool {
