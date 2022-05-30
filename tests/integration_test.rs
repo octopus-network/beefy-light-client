@@ -405,7 +405,7 @@ fn update_state_in_multiple_steps() {
 		let result = lc.complete_updating_state(9);
 		assert!(result.is_ok());
 		if result == Ok(true) {
-			break;
+			break
 		}
 	}
 	println!("lc: {:?}", lc);
