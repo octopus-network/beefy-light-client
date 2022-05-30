@@ -160,7 +160,7 @@ impl LightClient {
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
-				return Err(Error::CommitmentAlreadyUpdated);
+				return Err(Error::CommitmentAlreadyUpdated)
 			}
 		}
 
@@ -170,7 +170,7 @@ impl LightClient {
 			return Err(Error::InvalidNumberOfSignatures {
 				expected: (self.validator_set.len / 2) as usize,
 				got: signatures_count,
-			});
+			})
 		}
 
 		let SignedCommitment { commitment, signatures } = signed_commitment;
@@ -193,7 +193,7 @@ impl LightClient {
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
 		let result = mmr::verify_leaf_proof(commitment.payload, mmr_leaf_hash, mmr_proof)?;
 		if !result {
-			return Err(Error::InvalidMmrLeafProof);
+			return Err(Error::InvalidMmrLeafProof)
 		}
 
 		// update the latest commitment, including mmr_root
@@ -220,7 +220,7 @@ impl LightClient {
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
-				return Err(Error::CommitmentAlreadyUpdated);
+				return Err(Error::CommitmentAlreadyUpdated)
 			}
 		}
 
@@ -230,7 +230,7 @@ impl LightClient {
 			return Err(Error::InvalidNumberOfSignatures {
 				expected: (self.validator_set.len / 2) as usize,
 				got: signatures_count,
-			});
+			})
 		}
 
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
@@ -243,7 +243,7 @@ impl LightClient {
 		let result =
 			mmr::verify_leaf_proof(signed_commitment.commitment.payload, mmr_leaf_hash, mmr_proof)?;
 		if !result {
-			return Err(Error::InvalidMmrLeafProof);
+			return Err(Error::InvalidMmrLeafProof)
 		}
 
 		let commitment_hash = signed_commitment.commitment.hash();
@@ -265,10 +265,10 @@ impl LightClient {
 		if in_process_state.position >= in_process_state.signed_commitment.signatures.len() {
 			// discard the state
 			self.in_process_state = None;
-			return Ok(true);
+			return Ok(true)
 		}
-		let iterations = if in_process_state.position + iterations
-			> in_process_state.signed_commitment.signatures.len()
+		let iterations = if in_process_state.position + iterations >
+			in_process_state.signed_commitment.signatures.len()
 		{
 			in_process_state.signed_commitment.signatures.len() - in_process_state.position
 		} else {
@@ -297,16 +297,16 @@ impl LightClient {
 					}
 					// discard the state
 					self.in_process_state = None;
-					return Ok(true);
+					return Ok(true)
 				} else {
-					return Ok(false);
+					return Ok(false)
 				}
-			}
+			},
 			Err(_) => {
 				// discard the state
 				self.in_process_state = None;
-				return Err(Error::InvalidSignature);
-			}
+				return Err(Error::InvalidSignature)
+			},
 		}
 	}
 
@@ -322,7 +322,7 @@ impl LightClient {
 
 		let messages_hash = Keccak256::hash(messages);
 		if messages_hash != &header_digest[..] {
-			return Err(Error::DigestNotMatch);
+			return Err(Error::DigestNotMatch)
 		}
 
 		let mmr_root =
@@ -337,12 +337,12 @@ impl LightClient {
 
 		let header_hash = header.hash();
 		if header_hash != mmr_leaf.parent_number_and_hash.1 {
-			return Err(Error::HeaderHashNotMatch);
+			return Err(Error::HeaderHashNotMatch)
 		}
 
 		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
 		if !result {
-			return Err(Error::InvalidMmrLeafProof);
+			return Err(Error::InvalidMmrLeafProof)
 		}
 		Ok(())
 	}
@@ -383,13 +383,13 @@ impl LightClient {
 							proof.leaf_index,
 							&proof.leaf,
 						) {
-							return Err(Error::InvalidValidatorProof);
+							return Err(Error::InvalidValidatorProof)
 						}
-						break;
+						break
 					}
 				}
 				if !found {
-					return Err(Error::ValidatorNotFound);
+					return Err(Error::ValidatorNotFound)
 				}
 			}
 		}
