@@ -5,20 +5,20 @@ authors = ["Julian Sun <julian@oct.network>"]
 edition = "2018"
 
 [dependencies]
-borsh =  { version = "0.8.1", default-features = false }
-beefy-merkle-tree = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13", features = ["keccak"], default-features = false }
+borsh =  { version = "0.9.3", default-features = false }
+beefy-merkle-tree = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18", features = ["keccak"], default-features = false }
 blake2-rfc = { version = "0.2.18", default-features = false }
 byteorder = { version = "1", default-features = false }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.1.2", default-features = false, features = ["derive"] }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7.0", features = ["static-context"], default-features = false }
-mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
+mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.4.0" }
 # getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
 rand = { version = "0.8" }
-secp256k1-test = { package = "secp256k1", version = "0.20.3", features = ["rand-std", "recovery"] }
+secp256k1-test = { package = "secp256k1", version = "0.22.1", features = ["rand-std", "recovery"] }
 
 [features]
 default = ["std"]
