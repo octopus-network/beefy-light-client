@@ -16,7 +16,7 @@ fn merkle_root(
 ) -> Hash {
 	let mut current_hash = leaf_node_hash;
 
-	for current_position in 0..merkle_proof_items.len() {
+	for (current_position, _) in merkle_proof_items.iter().enumerate() {
 		let is_sibling_left = bit(merkle_proof_order_bit_field, current_position);
 		let sibling = merkle_proof_items[current_position];
 
