@@ -9,11 +9,23 @@ use std::cmp;
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ByteOrder, LittleEndian};
-use codec::{Decode, Encode, Input};
+use codec::{Decode, Encode, Input, MaxEncodedLen};
 use core::convert::TryInto;
+use scale_info::TypeInfo;
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	BorshDeserialize,
+	BorshSerialize,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct Signature(pub [u8; 65]);
 
 impl Default for Signature {
@@ -63,7 +75,7 @@ impl Commitment {
 	}
 }
 
-#[derive(Debug, Default, Clone, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, BorshDeserialize, BorshSerialize)]
 pub struct SignedCommitment {
 	pub commitment: Commitment,
 	pub signatures: Vec<Option<Signature>>,
@@ -106,7 +118,8 @@ impl CompactSignedCommitment {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
 
-		let signatures_compact = signatures.iter().filter_map(|x| x.clone()).collect::<Vec<_>>();
+		let signatures_compact: Vec<Signature> =
+			signatures.iter().filter_map(|x| x.clone()).collect();
 		let bits = {
 			let mut bits: Vec<u8> =
 				signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
@@ -186,6 +199,35 @@ mod tests {
 	use super::*;
 	use hex_literal::hex;
 
+	use sp_core::{keccak_256, Pair};
+	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
+
+	/// Key type for BEEFY module.
+	pub const KEY_TYPE: sp_application_crypto::KeyTypeId =
+		sp_application_crypto::KeyTypeId(*b"beef");
+
+	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
+	fn mock_signatures() -> (Signature, Signature) {
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
+
+		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
+		let _ =
+			SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
+				.unwrap();
+
+		let msg = keccak_256(b"This is the first message");
+		let sig1 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+			.unwrap()
+			.unwrap();
+
+		let msg = keccak_256(b"This is the second message");
+		let sig2 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+			.unwrap()
+			.unwrap();
+
+		(Signature(sig1.0), Signature(sig2.0))
+	}
+
 	#[test]
 	fn signature_from_hex_str_works() {
 		let signature_hex_str = "0x34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301";
@@ -193,13 +235,41 @@ mod tests {
 		assert_eq!(signature, Signature(hex!("34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301").into()));
 	}
 
+	// #[test]
+	// fn decode_signed_commitment_works_1() {
+	// 	let encoded_signed_commitment = hex!("ea1f52f73f22c9b9ea45b59f36de86e120b8f50b73b963c529584c838336c104a100000000000000000000000401e1b5cf0985f1c6a4d90fc5a050fb586166b0482e995ba1b00b3539097185ab5e7c07832d49a5cddf9b55a838b39eb9224b94077cfb04345788a15219598e858500");
+
+	// 	let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
+
+	// 	assert_eq!(signed_commitment.is_ok(), true);
+	// }
+
 	#[test]
-	fn decode_signed_commitment_works() {
-		let encoded_signed_commitment = hex!("ea1f52f73f22c9b9ea45b59f36de86e120b8f50b73b963c529584c838336c104a100000000000000000000000401e1b5cf0985f1c6a4d90fc5a050fb586166b0482e995ba1b00b3539097185ab5e7c07832d49a5cddf9b55a838b39eb9224b94077cfb04345788a15219598e858500");
+	fn decode_signed_commitment_works_2() {
+		let payload: [u8; 32] = [
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0,
+		];
 
-		let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
+		println!("payload = {:?}", payload);
 
-		assert_eq!(signed_commitment.is_ok(), true);
+		let commitment: Commitment = Commitment { payload, block_number: 5, validator_set_id: 0 };
+
+		let sigs = mock_signatures();
+
+		let signed = SignedCommitment {
+			commitment,
+			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+		};
+
+		// when
+		let encoded = codec::Encode::encode(&signed);
+		let decoded = SignedCommitment::decode(&mut &*encoded);
+
+		println!("decode data = {:?}", decoded);
+
+		// then
+		assert_eq!(decoded, Ok(signed));
 	}
 
 	#[test]
