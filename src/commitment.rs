@@ -9,7 +9,7 @@ use std::cmp;
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ByteOrder, LittleEndian};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Input};
 use core::convert::TryInto;
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
@@ -63,10 +63,122 @@ impl Commitment {
 	}
 }
 
-#[derive(Debug, Default, Clone, Encode, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Default, Clone, BorshDeserialize, BorshSerialize)]
 pub struct SignedCommitment {
 	pub commitment: Commitment,
 	pub signatures: Vec<Option<Signature>>,
+}
+
+/// Type to be used to denote placement of signatures
+type BitField = Vec<u8>;
+/// Compress 8 bit values into a single u8 Byte
+const CONTAINER_BIT_SIZE: usize = 8;
+
+/// Compressed representation of [`SignedCommitment`], used for encoding efficiency.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+struct CompactSignedCommitment {
+	/// The commitment, unchanged compared to regular [`SignedCommitment`].
+	commitment: Commitment,
+	/// A bitfield representing presence of a signature coming from a validator at some index.
+	///
+	/// The bit at index `0` is set to `1` in case we have a signature coming from a validator at
+	/// index `0` in in the original validator set. In case the [`SignedCommitment`] does not
+	/// contain that signature the `bit` will be set to `0`. Bits are packed into `Vec<u8>`
+	signatures_from: BitField,
+	/// Number of validators in the Validator Set and hence number of significant bits in the
+	/// [`signatures_from`] collection.
+	///
+	/// Note this might be smaller than the size of `signatures_compact` in case some signatures
+	/// are missing.
+	validator_set_len: u32,
+	/// A `Vec` containing all `Signature`s present in the original [`SignedCommitment`].
+	///
+	/// Note that in order to associate a `Signature` from this `Vec` with a validator, one needs
+	/// to look at the `signatures_from` bitfield, since some validators might have not produced a
+	/// signature.
+	signatures_compact: Vec<Signature>,
+}
+
+impl CompactSignedCommitment {
+	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
+	/// efficient network transport.
+	fn pack(signed_commitment: &SignedCommitment) -> Self {
+		let SignedCommitment { commitment, signatures } = signed_commitment;
+		let validator_set_len = signatures.len() as u32;
+
+		let signatures_compact = signatures.iter().filter_map(|x| x.clone()).collect::<Vec<_>>();
+		let bits = {
+			let mut bits: Vec<u8> =
+				signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
+			// Resize with excess bits for placement purposes
+			let excess_bits_len =
+				CONTAINER_BIT_SIZE - (validator_set_len as usize % CONTAINER_BIT_SIZE);
+			bits.resize(bits.len() + excess_bits_len, 0);
+			bits
+		};
+
+		let mut signatures_from: BitField = vec![];
+		let chunks = bits.chunks(CONTAINER_BIT_SIZE);
+		for chunk in chunks {
+			let mut iter = chunk.iter().copied();
+			let mut v = iter.next().unwrap() as u8;
+
+			for bit in iter {
+				v <<= 1;
+				v |= bit as u8;
+			}
+
+			signatures_from.push(v);
+		}
+
+		Self {
+			commitment: commitment.clone(),
+			signatures_from,
+			validator_set_len,
+			signatures_compact,
+		}
+	}
+
+	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
+	fn unpack(temporary_signatures: CompactSignedCommitment) -> SignedCommitment {
+		let CompactSignedCommitment {
+			commitment,
+			signatures_from,
+			validator_set_len,
+			signatures_compact,
+		} = temporary_signatures;
+		let mut bits: Vec<u8> = vec![];
+
+		for block in signatures_from {
+			for bit in 0..CONTAINER_BIT_SIZE {
+				bits.push((block >> (CONTAINER_BIT_SIZE - bit - 1)) & 1);
+			}
+		}
+
+		bits.truncate(validator_set_len as usize);
+
+		let mut next_signature = signatures_compact.into_iter();
+		let signatures: Vec<Option<Signature>> = bits
+			.iter()
+			.map(|&x| if x == 1 { next_signature.next() } else { None })
+			.collect();
+
+		SignedCommitment { commitment, signatures }
+	}
+}
+
+impl Encode for SignedCommitment {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		let temp = CompactSignedCommitment::pack(self);
+		temp.using_encoded(f)
+	}
+}
+
+impl Decode for SignedCommitment {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let temp = CompactSignedCommitment::decode(input)?;
+		Ok(CompactSignedCommitment::unpack(temp))
+	}
 }
 
 #[cfg(test)]
