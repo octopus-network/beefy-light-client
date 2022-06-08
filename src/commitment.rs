@@ -130,7 +130,7 @@ impl CompactSignedCommitment {
 			bits
 		};
 
-		let mut signatures_from: BitField = vec![];
+		let mut signatures_from: BitField = Vec::new();
 		let chunks = bits.chunks(CONTAINER_BIT_SIZE);
 		for chunk in chunks {
 			let mut iter = chunk.iter().copied();
@@ -160,7 +160,7 @@ impl CompactSignedCommitment {
 			validator_set_len,
 			signatures_compact,
 		} = temporary_signatures;
-		let mut bits: Vec<u8> = vec![];
+		let mut bits: Vec<u8> = Vec::new();
 
 		for block in signatures_from {
 			for bit in 0..CONTAINER_BIT_SIZE {
