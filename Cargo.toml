@@ -20,10 +20,6 @@ mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, ver
 hex-literal = "0.3.1"
 rand = { version = "0.8" }
 secp256k1-test = { package = "secp256k1", version = "0.22.1", features = ["rand-std", "recovery"] }
-sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18" }
-sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18" }
-sp-keystore = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18" }
-sp-application-crypto = {git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18"}
 
 [features]
 default = ["std"]

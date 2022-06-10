@@ -25,6 +25,8 @@ pub mod mmr;
 pub mod simplified_mmr;
 pub mod validator_set;
 
+pub use commitment::BeefyPayloadId;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
 	/// [Commitment] can't be imported, cause it's signed by either past or future validator set.
@@ -109,7 +111,7 @@ pub struct ValidatorMerkleProof {
 	pub leaf: Vec<u8>,
 }
 
-#[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, BorshDeserialize, BorshSerialize)]
 pub struct InProcessState {
 	pub position: usize,
 	commitment_hash: Hash,
@@ -192,7 +194,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(commitment.payload, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(commitment.payload.hash(), mmr_leaf_hash, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -241,8 +243,11 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result =
-			mmr::verify_leaf_proof(signed_commitment.commitment.payload, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(
+			signed_commitment.commitment.payload.hash(),
+			mmr_leaf_hash,
+			mmr_proof,
+		)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -328,8 +333,12 @@ impl LightClient {
 			return Err(Error::DigestNotMatch)
 		}
 
-		let mmr_root =
-			self.latest_commitment.as_ref().ok_or(Error::MissingLatestCommitment)?.payload;
+		let mmr_root = self
+			.latest_commitment
+			.as_ref()
+			.ok_or(Error::MissingLatestCommitment)?
+			.payload
+			.hash();
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let mmr_leaf: Vec<u8> =
