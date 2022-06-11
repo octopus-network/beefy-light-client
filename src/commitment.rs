@@ -8,7 +8,6 @@ use std::cmp;
 
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
-use byteorder::{ByteOrder, LittleEndian};
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;
 use scale_info::TypeInfo;
@@ -89,10 +88,6 @@ impl Payload {
 		self.0.push((id, value));
 		self.0.sort_by_key(|(id, _)| *id);
 		self
-	}
-
-	pub fn hash(&self) -> Hash {
-		Keccak256::hash(&self.encode())
 	}
 }
 

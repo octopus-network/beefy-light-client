@@ -12,7 +12,9 @@ use alloc::vec::Vec;
 use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
-use commitment::{Commitment, Signature, SignedCommitment};
+use commitment::{
+	known_payload_ids::MMR_ROOT_ID, Commitment, Signature, SignedCommitment, VersionedFinalityProof,
+};
 use header::Header;
 use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
@@ -51,7 +53,11 @@ pub enum Error {
 	///
 	InvalidMessage,
 	///
+	InvalidVersionedFinalityProof,
+	///
 	InvalidSignedCommitment,
+	///
+	InvalidCommitmentPayload,
 	///
 	InvalidRecoveryId,
 	///
@@ -153,13 +159,15 @@ impl LightClient {
 	// Import a signed commitment and update the state of light client.
 	pub fn update_state(
 		&mut self,
-		signed_commitment: &[u8],
+		versioned_finality_proof: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
-			.map_err(|_| Error::InvalidSignedCommitment)?;
+		let versioned_finality_proof =
+			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
+				.map_err(|_| Error::InvalidVersionedFinalityProof)?;
+		let VersionedFinalityProof::V1(signed_commitment) = versioned_finality_proof;
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
@@ -186,7 +194,10 @@ impl LightClient {
 			0,
 			signatures.len(),
 		)?;
-
+		let mmr_root: [u8; 32] = commitment
+			.payload
+			.get_decoded(&MMR_ROOT_ID)
+			.ok_or(Error::InvalidCommitmentPayload)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let mmr_leaf: Vec<u8> =
@@ -194,7 +205,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(commitment.payload.hash(), mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -213,13 +224,15 @@ impl LightClient {
 	// Import a signed commitment and verify signatures in multiple steps.
 	pub fn start_updating_state(
 		&mut self,
-		signed_commitment: &[u8],
+		versioned_finality_proof: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
-			.map_err(|_| Error::InvalidSignedCommitment)?;
+		let versioned_finality_proof =
+			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
+				.map_err(|_| Error::InvalidVersionedFinalityProof)?;
+		let VersionedFinalityProof::V1(signed_commitment) = versioned_finality_proof;
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
@@ -236,6 +249,11 @@ impl LightClient {
 			})
 		}
 
+		let mmr_root: [u8; 32] = signed_commitment
+			.commitment
+			.payload
+			.get_decoded(&MMR_ROOT_ID)
+			.ok_or(Error::InvalidCommitmentPayload)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let mmr_leaf: Vec<u8> =
@@ -243,11 +261,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(
-			signed_commitment.commitment.payload.hash(),
-			mmr_leaf_hash,
-			mmr_proof,
-		)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -333,12 +347,13 @@ impl LightClient {
 			return Err(Error::DigestNotMatch)
 		}
 
-		let mmr_root = self
+		let mmr_root: [u8; 32] = self
 			.latest_commitment
 			.as_ref()
 			.ok_or(Error::MissingLatestCommitment)?
 			.payload
-			.hash();
+			.get_decoded(&MMR_ROOT_ID)
+			.ok_or(Error::InvalidCommitmentPayload)?;
 		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
 			.map_err(|_| Error::CantDecodeMmrProof)?;
 		let mmr_leaf: Vec<u8> =
