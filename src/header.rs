@@ -153,30 +153,30 @@ impl Encode for DigestItem {
 			Self::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
-			}
+			},
 			Self::Consensus(val, data) => {
 				DigestItemType::Consensus.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
-			}
+			},
 			Self::Seal(val, sig) => {
 				DigestItemType::Seal.encode_to(&mut v);
 				(val, sig).encode_to(&mut v);
-			}
+			},
 			Self::PreRuntime(val, data) => {
 				DigestItemType::PreRuntime.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
-			}
+			},
 			Self::ChangesTrieSignal(changes_trie_signal) => {
 				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
 				changes_trie_signal.encode_to(&mut v);
-			}
+			},
 			Self::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
-			}
+			},
 			Self::RuntimeEnvironmentUpdated => {
 				DigestItemType::RuntimeEnvironmentUpdated.encode_to(&mut v);
-			}
+			},
 		}
 
 		v
@@ -191,18 +191,17 @@ impl Decode for DigestItem {
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::PreRuntime(vals.0, vals.1))
-			}
+			},
 			DigestItemType::Consensus => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Consensus(vals.0, vals.1))
-			}
+			},
 			DigestItemType::Seal => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Seal(vals.0, vals.1))
-			}
-			DigestItemType::ChangesTrieSignal => {
-				Ok(Self::ChangesTrieSignal(Decode::decode(input)?))
-			}
+			},
+			DigestItemType::ChangesTrieSignal =>
+				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
 			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
 			DigestItemType::RuntimeEnvironmentUpdated => Ok(Self::RuntimeEnvironmentUpdated),
 		}

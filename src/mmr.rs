@@ -84,7 +84,7 @@ impl NodesUtils {
 	/// Calculate maximal depth of the MMR.
 	pub fn depth(&self) -> u32 {
 		if self.no_of_leaves == 0 {
-			return 0;
+			return 0
 		}
 
 		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
@@ -96,12 +96,12 @@ struct HashMerger;
 impl mmr_lib::Merge for HashMerger {
 	type Item = Hash;
 
-	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
+	fn merge(left: &Self::Item, right: &Self::Item) -> mmr_lib::Result<Self::Item> {
 		let mut combined = [0_u8; 64];
 		combined[0..32].copy_from_slice(&left[..]);
 		combined[32..64].copy_from_slice(&right[..]);
 
-		Keccak256::hash(&combined)
+		Ok(Keccak256::hash(&combined))
 	}
 }
 
