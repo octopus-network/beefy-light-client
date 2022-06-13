@@ -1408,6 +1408,10 @@ mod tests {
                         9ba01558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f231
                         9a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01"
 			);
+
+		let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
+
+		assert_eq!(signed_commitment.is_ok(), true);
 	}
 
 	#[test]
