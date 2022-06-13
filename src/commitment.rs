@@ -6,11 +6,15 @@ use core::cmp;
 #[cfg(feature = "std")]
 use std::cmp;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(
@@ -55,9 +59,21 @@ pub mod known_payload_ids {
 /// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
 /// support a subset of possible values.
 #[derive(
-	Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, BorshDeserialize, BorshSerialize,
+	Decode,
+	Encode,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Ord,
+	PartialOrd,
+	BorshDeserialize,
+	BorshSerialize,
+	Default,
+	Serialize,
+	Deserialize,
 )]
-pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
+pub struct Payload(pub Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
 	/// Construct a new payload given an initial vallue
@@ -88,6 +104,11 @@ impl Payload {
 		self.0.push((id, value));
 		self.0.sort_by_key(|(id, _)| *id);
 		self
+	}
+
+	/// Returns `true` if the Payload contains no elements.
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
 	}
 }
 
@@ -294,7 +315,7 @@ impl Decode for SignedCommitment {
 ///
 /// Note that this enum is subject to change in the future with introduction
 /// of additional cryptographic primitives to BEEFY.
-#[derive(Clone, Debug, PartialEq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum VersionedFinalityProof {
 	#[codec(index = 1)]
 	/// Current active version
