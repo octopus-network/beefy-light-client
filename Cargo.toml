@@ -2,7 +2,7 @@
 name = "beefy-light-client"
 version = "0.1.0"
 authors = ["Julian Sun <julian@oct.network>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 borsh =  { version = "0.9.3", default-features = false }
