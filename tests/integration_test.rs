@@ -2,7 +2,6 @@ use beefy_light_client::{
 	beefy_ecdsa_to_ethereum,
 	commitment::{
 		known_payload_ids::MMR_ROOT_ID, Commitment, Payload, Signature, SignedCommitment,
-		VersionedFinalityProof,
 	},
 	header::{Digest, Header},
 	mmr::{MmrLeaf, MmrLeafProof},
@@ -48,10 +47,9 @@ fn update_state_works() {
 		&hex!("031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa")[..],
 	);
 
-	let encoded_versioned_finality_proof_1 = hex!("01046d688017ffed791fa51b459d3c953a1f8f3e4718bcf8aa571a19bc0327d82761d3257909000000000000000000000004d80500000010c73029d26bba5d549db469b75950c4cb55aaf43de0044a32612acca99445bbf93a1edbc9f5fa5151c1a2e2b6f59968eb1485d001c6b9078c2ed310bad20779b001a4b79f6018e3936a64bd3281dca522fb33bf68720afff458c7ca0db1bfbd270d36c5c3db98abb59d9abbeda7b74b83510120172e7aa6c74f5c9239c85befa85f003bed8b85ff2f466df62569d4cd0169773b4ae4dde1139d4d0721b497f938312803e1885b21f6230ef5a8e44ad3dbbb1cd0e89226a41e35507e91ed62bcf4dc22013f45d94e3a6b97f5208d90d2bf3f2702a440f3f453c438cdd553bf2f2cc02cc23b230b3b12c1e68e39fbaf701e65457a372facba3c530ab56f3eec5e6766eddb01");
-	let versioned_finality_proof_1 =
-		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_1[..]);
-	println!("versioned_finality_proof_1: {:?}", versioned_finality_proof_1);
+	let encoded_signed_commitment_1 = hex!("046d688017ffed791fa51b459d3c953a1f8f3e4718bcf8aa571a19bc0327d82761d3257909000000000000000000000004d80500000010c73029d26bba5d549db469b75950c4cb55aaf43de0044a32612acca99445bbf93a1edbc9f5fa5151c1a2e2b6f59968eb1485d001c6b9078c2ed310bad20779b001a4b79f6018e3936a64bd3281dca522fb33bf68720afff458c7ca0db1bfbd270d36c5c3db98abb59d9abbeda7b74b83510120172e7aa6c74f5c9239c85befa85f003bed8b85ff2f466df62569d4cd0169773b4ae4dde1139d4d0721b497f938312803e1885b21f6230ef5a8e44ad3dbbb1cd0e89226a41e35507e91ed62bcf4dc22013f45d94e3a6b97f5208d90d2bf3f2702a440f3f453c438cdd553bf2f2cc02cc23b230b3b12c1e68e39fbaf701e65457a372facba3c530ab56f3eec5e6766eddb01");
+	let signed_commitment_1 = SignedCommitment::decode(&mut &encoded_signed_commitment_1[..]);
+	println!("signed_commitment_1: {:?}", signed_commitment_1);
 
 	let validator_proofs_1 = vec![
 		ValidatorMerkleProof {
@@ -115,7 +113,7 @@ fn update_state_works() {
 	println!("mmr_proof_1: {:?}", mmr_proof_1);
 	assert!(lc
 		.update_state(
-			&encoded_versioned_finality_proof_1,
+			&encoded_signed_commitment_1,
 			&validator_proofs_1,
 			&encoded_mmr_leaf_1,
 			&encoded_mmr_proof_1,
@@ -123,10 +121,9 @@ fn update_state_works() {
 		.is_ok());
 	println!("light client: {:?}", lc);
 
-	let encoded_versioned_finality_proof_2 = hex!("01046d688037d21b14f9701ca2deb9946dbad32de48d8df3ad8988bfaabdbafa329fe07ccd11000000000000000000000004d80500000010b6f60090f011f376a7673d38a810ad15423381fbf6e8e1a88c2d39d58b5473b83dae3750c39be39be17bada861944b2d6f43c7e329b247905eb17dc3ecdb7f8a0062969c39737b7b3101d639ed2bd8aa3a61647bb4569d2a6c78b450e46012879919c90b149493d523d030490e389b3d4ee1e3f2a24f4e0cf5cd4944c03921ed3500389cf1cfe7c117052416db37920594387170fd404f79b98dc39f9b56ede6865a10306bf55a2d8814e36dbb51142f015813acbb1b187fdfefcc1f05b6505dce83019962e14afb83630dffec978b47f52016af699d21d4b1661acf4c01bb4845adcc4fa3e421dca35fb0c4d58d387bdc0d11ec161502e7c6f85c86849f569bc8b4c401");
-	let versioned_finality_proof_2 =
-		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_2[..]);
-	println!("versioned_finality_proof_2: {:?}", versioned_finality_proof_2);
+	let encoded_signed_commitment_2 = hex!("046d688037d21b14f9701ca2deb9946dbad32de48d8df3ad8988bfaabdbafa329fe07ccd11000000000000000000000004d80500000010b6f60090f011f376a7673d38a810ad15423381fbf6e8e1a88c2d39d58b5473b83dae3750c39be39be17bada861944b2d6f43c7e329b247905eb17dc3ecdb7f8a0062969c39737b7b3101d639ed2bd8aa3a61647bb4569d2a6c78b450e46012879919c90b149493d523d030490e389b3d4ee1e3f2a24f4e0cf5cd4944c03921ed3500389cf1cfe7c117052416db37920594387170fd404f79b98dc39f9b56ede6865a10306bf55a2d8814e36dbb51142f015813acbb1b187fdfefcc1f05b6505dce83019962e14afb83630dffec978b47f52016af699d21d4b1661acf4c01bb4845adcc4fa3e421dca35fb0c4d58d387bdc0d11ec161502e7c6f85c86849f569bc8b4c401");
+	let signed_commitment_2 = SignedCommitment::decode(&mut &encoded_signed_commitment_2[..]);
+	println!("signed_commitment_2: {:?}", signed_commitment_2);
 
 	let validator_proofs_2 = vec![
 		ValidatorMerkleProof {
@@ -190,7 +187,7 @@ fn update_state_works() {
 	println!("mmr_proof_2: {:?}", mmr_proof_2);
 	assert!(lc
 		.update_state(
-			&encoded_versioned_finality_proof_2,
+			&encoded_signed_commitment_2,
 			&validator_proofs_2,
 			&encoded_mmr_leaf_2,
 			&encoded_mmr_proof_2,
@@ -312,7 +309,7 @@ fn maximum_validators_test() {
 
 		signed_commitment.signatures.push(Some(Signature(buf)));
 	}
-	let encoded_versioned_finality_proof = VersionedFinalityProof::V1(signed_commitment).encode();
+	let encoded_signed_commitment = signed_commitment.encode();
 
 	let mut lc = new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
@@ -336,7 +333,7 @@ fn maximum_validators_test() {
 	let encoded_mmr_proof = hex!("16000000000000001900000000000000143b96661a7161a6a760af588ebdefc79401e1c046d889d59f76d824406f713188c58385673dc5fffca2611dec971872597fa18462ec82f781d44c7f51f888460a927066f988d8d2b5c193a0fca08920bc21c56dfd2ea44fdcd9ceb97acd22e1a5dc8d1b12b23542b45f9e025bc4e611129aae70a08a7180839c8b698becf48e2326479d9be91711c950d8584e9f9dd49b6424e13d590afc8b00a41d5be40c4fb5");
 	assert!(lc
 		.update_state(
-			&encoded_versioned_finality_proof,
+			&encoded_signed_commitment,
 			&validator_proofs,
 			&encoded_mmr_leaf,
 			&encoded_mmr_proof,
@@ -376,7 +373,7 @@ fn update_state_in_multiple_steps() {
 
 		signed_commitment.signatures.push(Some(Signature(buf)));
 	}
-	let encoded_versioned_finality_proof = VersionedFinalityProof::V1(signed_commitment).encode();
+	let encoded_signed_commitment = signed_commitment.encode();
 
 	let mut lc = new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
@@ -400,7 +397,7 @@ fn update_state_in_multiple_steps() {
 	let encoded_mmr_proof =  hex!("16000000000000001900000000000000143b96661a7161a6a760af588ebdefc79401e1c046d889d59f76d824406f713188c58385673dc5fffca2611dec971872597fa18462ec82f781d44c7f51f888460a927066f988d8d2b5c193a0fca08920bc21c56dfd2ea44fdcd9ceb97acd22e1a5dc8d1b12b23542b45f9e025bc4e611129aae70a08a7180839c8b698becf48e2326479d9be91711c950d8584e9f9dd49b6424e13d590afc8b00a41d5be40c4fb5");
 	assert!(lc
 		.start_updating_state(
-			&encoded_versioned_finality_proof,
+			&encoded_signed_commitment,
 			&validator_proofs,
 			&encoded_mmr_leaf,
 			&encoded_mmr_proof,

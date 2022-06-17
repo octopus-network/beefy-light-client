@@ -12,9 +12,7 @@ use alloc::vec::Vec;
 use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
-use commitment::{
-	known_payload_ids::MMR_ROOT_ID, Commitment, Signature, SignedCommitment, VersionedFinalityProof,
-};
+use commitment::{known_payload_ids::MMR_ROOT_ID, Commitment, Signature, SignedCommitment};
 use header::Header;
 use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
@@ -52,8 +50,6 @@ pub enum Error {
 	InvalidSignature,
 	///
 	InvalidMessage,
-	///
-	InvalidVersionedFinalityProof,
 	///
 	InvalidSignedCommitment,
 	///
@@ -159,15 +155,13 @@ impl LightClient {
 	// Import a signed commitment and update the state of light client.
 	pub fn update_state(
 		&mut self,
-		versioned_finality_proof: &[u8],
+		signed_commitment: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let versioned_finality_proof =
-			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
-				.map_err(|_| Error::InvalidVersionedFinalityProof)?;
-		let VersionedFinalityProof::V1(signed_commitment) = versioned_finality_proof;
+		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
+			.map_err(|_| Error::InvalidSignedCommitment)?;
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
@@ -224,15 +218,13 @@ impl LightClient {
 	// Import a signed commitment and verify signatures in multiple steps.
 	pub fn start_updating_state(
 		&mut self,
-		versioned_finality_proof: &[u8],
+		signed_commitment: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let versioned_finality_proof =
-			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
-				.map_err(|_| Error::InvalidVersionedFinalityProof)?;
-		let VersionedFinalityProof::V1(signed_commitment) = versioned_finality_proof;
+		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
+			.map_err(|_| Error::InvalidSignedCommitment)?;
 
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
