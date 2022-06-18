@@ -13,6 +13,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7.0", features = ["static-context"], default-features = false }
 mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.4.0" }
+serde = { version = "1.0", default-features = false }
 # getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
@@ -30,4 +31,5 @@ std = [
 	"libsecp256k1/std",
 	"mmr-lib/std",
 	"borsh/std",
+	"serde/std",
 ]
