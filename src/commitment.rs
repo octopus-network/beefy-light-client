@@ -2,6 +2,8 @@
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use core::cmp;
+#[cfg(not(feature = "std"))]
+use alloc::vec;
 
 #[cfg(feature = "std")]
 use std::cmp;
