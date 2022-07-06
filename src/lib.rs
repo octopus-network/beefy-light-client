@@ -24,6 +24,7 @@ pub mod header;
 pub mod mmr;
 pub mod simplified_mmr;
 pub mod validator_set;
+pub mod verifier_for_external_state_data;
 
 pub use commitment::BeefyPayloadId;
 
@@ -80,6 +81,8 @@ pub enum Error {
 	ValidatorNotFound,
 	///
 	MissingInProcessState,
+	///
+	MissingBeefyKeySetOfValidatorSet { validator_set_id: u64 },
 }
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
