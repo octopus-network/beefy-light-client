@@ -121,8 +121,7 @@ fn verify_commitment_signatures<T: BeefyKeySet>(
 			.or(Err(Error::WrongSignature))?
 			.serialize()
 			.to_vec();
-		let validator_address = Keccak256::hash(&validator[1..])[12..].to_vec();
-		if !beefy_key_set.contains(&validator_address) {
+		if !beefy_key_set.contains(&validator) {
 			return Err(Error::ValidatorNotFound)
 		}
 	}
