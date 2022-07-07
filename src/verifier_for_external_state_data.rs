@@ -18,7 +18,7 @@ pub fn verify_signed_commitment<T, S>(
 	beefy_key_set_histories: &T,
 	mmr_leaf: &[u8],
 	mmr_proof: &[u8],
-) -> Result<(), Error>
+) -> Result<Commitment, Error>
 where
 	T: BeefyKeySetHistories<S>,
 	S: BeefyKeySet,
@@ -62,7 +62,7 @@ where
 		return Err(Error::InvalidMmrLeafProof)
 	}
 
-	Ok(())
+	Ok(commitment)
 }
 
 ///
