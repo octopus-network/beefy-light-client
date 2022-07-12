@@ -6,7 +6,7 @@ pub trait BeefyCommitmentHistories {
 	///
 	fn get(&self, block_number: &u32, validator_set_id: &ValidatorSetId) -> Option<Commitment>;
 	///
-	fn store(&mut self, commitment: Commitment);
+	fn store(&mut self, commitment: &Commitment);
 }
 
 pub trait BeefyAuthoritySetHistories {
@@ -15,7 +15,7 @@ pub trait BeefyAuthoritySetHistories {
 	///
 	fn get(&self, set_id: &ValidatorSetId) -> Option<BeefyNextAuthoritySet>;
 	///
-	fn store(&mut self, validator_set: BeefyNextAuthoritySet);
+	fn store(&mut self, validator_set: &BeefyNextAuthoritySet);
 }
 
 ///
@@ -26,7 +26,7 @@ pub fn verify_signed_commitment<T, U>(
 	mmr_proof: &[u8],
 	commitment_histories: &mut T,
 	validator_set_histories: &mut U,
-) -> Result<(), Error>
+) -> Result<Commitment, Error>
 where
 	T: BeefyCommitmentHistories,
 	U: BeefyAuthoritySetHistories,
@@ -36,7 +36,7 @@ where
 	let SignedCommitment { commitment, signatures } = signed_commitment;
 
 	if commitment_histories.contains(&commitment) {
-		return Ok(())
+		return Ok(commitment)
 	}
 
 	let validator_set = match validator_set_histories.get(&commitment.validator_set_id) {
@@ -83,10 +83,10 @@ where
 		return Err(Error::InvalidMmrLeafProof)
 	}
 
-	commitment_histories.store(commitment);
-	validator_set_histories.store(mmr_leaf.beefy_next_authority_set);
+	commitment_histories.store(&commitment);
+	validator_set_histories.store(&mmr_leaf.beefy_next_authority_set);
 
-	Ok(())
+	Ok(commitment)
 }
 
 ///
