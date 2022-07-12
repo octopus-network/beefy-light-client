@@ -1,47 +1,46 @@
 use crate::*;
 
-pub trait BeefyCommitmentHistories {
+pub trait LightClientStateData {
 	///
-	fn contains(&self, commitment: &Commitment) -> bool;
+	fn contains_authority_set(&self, set_id: &ValidatorSetId) -> bool;
 	///
-	fn get(&self, block_number: &u32, validator_set_id: &ValidatorSetId) -> Option<Commitment>;
+	fn get_authority_set(&self, set_id: &ValidatorSetId) -> Option<BeefyNextAuthoritySet>;
 	///
-	fn store(&mut self, commitment: &Commitment);
-}
-
-pub trait BeefyAuthoritySetHistories {
+	fn store_authority_set(&mut self, validator_set: &BeefyNextAuthoritySet);
 	///
-	fn contains(&self, set_id: &ValidatorSetId) -> bool;
+	fn contains_commitment(&self, commitment: &Commitment) -> bool;
 	///
-	fn get(&self, set_id: &ValidatorSetId) -> Option<BeefyNextAuthoritySet>;
+	fn get_commitment(
+		&self,
+		block_number: &u32,
+		validator_set_id: &ValidatorSetId,
+	) -> Option<Commitment>;
 	///
-	fn store(&mut self, validator_set: &BeefyNextAuthoritySet);
+	fn store_commitment(&mut self, commitment: &Commitment);
 }
 
 ///
-pub fn verify_signed_commitment<T, U>(
+pub fn verify_signed_commitment<T: LightClientStateData>(
 	signed_commitment: &[u8],
 	validator_proofs: &[ValidatorMerkleProof],
 	mmr_leaf: &[u8],
 	mmr_proof: &[u8],
-	commitment_histories: &mut T,
-	validator_set_histories: &mut U,
-) -> Result<Commitment, Error>
-where
-	T: BeefyCommitmentHistories,
-	U: BeefyAuthoritySetHistories,
-{
+	light_client_state_data: &mut T,
+) -> Result<Commitment, Error> {
 	let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
 		.map_err(|_| Error::InvalidSignedCommitment)?;
 	let SignedCommitment { commitment, signatures } = signed_commitment;
 
-	if commitment_histories.contains(&commitment) {
+	if light_client_state_data.contains_commitment(&commitment) {
 		return Ok(commitment)
 	}
 
-	let validator_set = match validator_set_histories.get(&commitment.validator_set_id) {
+	let validator_set = match light_client_state_data
+		.get_authority_set(&commitment.validator_set_id)
+	{
 		Some(validator_set) => validator_set,
-		None => match validator_set_histories.get(&(commitment.validator_set_id - 1)) {
+		None => match light_client_state_data.get_authority_set(&(commitment.validator_set_id - 1))
+		{
 			Some(validator_set) => validator_set,
 			None =>
 				return Err(Error::MissingBeefyAuthoritySetOf {
@@ -83,8 +82,8 @@ where
 		return Err(Error::InvalidMmrLeafProof)
 	}
 
-	commitment_histories.store(&commitment);
-	validator_set_histories.store(&mmr_leaf.beefy_next_authority_set);
+	light_client_state_data.store_commitment(&commitment);
+	light_client_state_data.store_authority_set(&mmr_leaf.beefy_next_authority_set);
 
 	Ok(commitment)
 }
