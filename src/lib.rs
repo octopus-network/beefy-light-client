@@ -82,7 +82,7 @@ pub enum Error {
 	///
 	MissingInProcessState,
 	///
-	MissingBeefyKeySetOfValidatorSet { validator_set_id: u64 },
+	MissingBeefyAuthoritySetOf { validator_set_id: u64 },
 }
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses

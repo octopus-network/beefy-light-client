@@ -1,51 +1,72 @@
 use crate::*;
 
-pub trait BeefyKeySet {
+pub trait BeefyCommitmentHistories {
 	///
-	fn contains(&self, sig: &Vec<u8>) -> bool;
+	fn contains(&self, commitment: &Commitment) -> bool;
 	///
-	fn len(&self) -> usize;
+	fn get(&self, block_number: &u32, validator_set_id: &ValidatorSetId) -> Option<Commitment>;
+	///
+	fn store(&mut self, commitment: Commitment);
 }
 
-pub trait BeefyKeySetHistories<T: BeefyKeySet> {
+pub trait BeefyAuthoritySetHistories {
 	///
-	fn get(&self, validator_set_id: u64) -> Option<T>;
+	fn contains(&self, set_id: &ValidatorSetId) -> bool;
+	///
+	fn get(&self, set_id: &ValidatorSetId) -> Option<BeefyNextAuthoritySet>;
+	///
+	fn store(&mut self, validator_set: BeefyNextAuthoritySet);
 }
 
 ///
-pub fn verify_signed_commitment<T, S>(
+pub fn verify_signed_commitment<T, U>(
 	signed_commitment: &[u8],
-	beefy_key_set_histories: &T,
+	validator_proofs: &[ValidatorMerkleProof],
 	mmr_leaf: &[u8],
 	mmr_proof: &[u8],
-) -> Result<Commitment, Error>
+	commitment_histories: &mut T,
+	validator_set_histories: &mut U,
+) -> Result<(), Error>
 where
-	T: BeefyKeySetHistories<S>,
-	S: BeefyKeySet,
+	T: BeefyCommitmentHistories,
+	U: BeefyAuthoritySetHistories,
 {
 	let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
 		.map_err(|_| Error::InvalidSignedCommitment)?;
-
-	let signatures_count = signed_commitment.signatures.iter().filter(|&sig| sig.is_some()).count();
 	let SignedCommitment { commitment, signatures } = signed_commitment;
 
-	let beefy_key_set = beefy_key_set_histories.get(commitment.validator_set_id);
-	if beefy_key_set.is_none() {
-		return Err(Error::MissingBeefyKeySetOfValidatorSet {
-			validator_set_id: commitment.validator_set_id,
-		})
+	if commitment_histories.contains(&commitment) {
+		return Ok(())
 	}
-	let beefy_key_set = beefy_key_set.unwrap();
 
-	if signatures_count < (beefy_key_set.len() / 2) as usize {
+	let validator_set = match validator_set_histories.get(&commitment.validator_set_id) {
+		Some(validator_set) => validator_set,
+		None => match validator_set_histories.get(&(commitment.validator_set_id - 1)) {
+			Some(validator_set) => validator_set,
+			None =>
+				return Err(Error::MissingBeefyAuthoritySetOf {
+					validator_set_id: commitment.validator_set_id,
+				}),
+		},
+	};
+
+	let signatures_count = signatures.iter().filter(|&sig| sig.is_some()).count();
+	if signatures_count < (validator_set.len / 2) as usize {
 		return Err(Error::InvalidNumberOfSignatures {
-			expected: (beefy_key_set.len() / 2) as usize,
+			expected: (validator_set.len / 2) as usize,
 			got: signatures_count,
 		})
 	}
 
 	let commitment_hash = commitment.hash();
-	verify_commitment_signatures(&commitment_hash, &signatures, &beefy_key_set)?;
+	LightClient::verify_commitment_signatures(
+		&commitment_hash,
+		&signatures,
+		&validator_set.root,
+		validator_proofs,
+		0,
+		signatures.len(),
+	)?;
 	let mmr_root: [u8; 32] = commitment
 		.payload
 		.get_decoded(&MMR_ROOT_ID)
@@ -55,14 +76,17 @@ where
 	let mmr_leaf: Vec<u8> =
 		Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
 	let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-	let _mmr_leaf: MmrLeaf =
+	let mmr_leaf: MmrLeaf =
 		Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
 	let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
 	if !result {
 		return Err(Error::InvalidMmrLeafProof)
 	}
 
-	Ok(commitment)
+	commitment_histories.store(commitment);
+	validator_set_histories.store(mmr_leaf.beefy_next_authority_set);
+
+	Ok(())
 }
 
 ///
@@ -101,29 +125,6 @@ pub fn verify_solochain_messages(
 	let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
 	if !result {
 		return Err(Error::InvalidMmrLeafProof)
-	}
-	Ok(())
-}
-
-fn verify_commitment_signatures<T: BeefyKeySet>(
-	commitment_hash: &Hash,
-	signatures: &[Option<Signature>],
-	beefy_key_set: &T,
-) -> Result<(), Error> {
-	let msg =
-		libsecp256k1::Message::parse_slice(&commitment_hash[..]).or(Err(Error::InvalidMessage))?;
-	for signature in signatures.iter().take(signatures.len()).flatten() {
-		let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64])
-			.or(Err(Error::InvalidSignature))?;
-		let recovery_id =
-			libsecp256k1::RecoveryId::parse(signature.0[64]).or(Err(Error::InvalidRecoveryId))?;
-		let validator = libsecp256k1::recover(&msg, &sig, &recovery_id)
-			.or(Err(Error::WrongSignature))?
-			.serialize()
-			.to_vec();
-		if !beefy_key_set.contains(&validator) {
-			return Err(Error::ValidatorNotFound)
-		}
 	}
 	Ok(())
 }
