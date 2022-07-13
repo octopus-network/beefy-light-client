@@ -127,3 +127,16 @@ pub fn verify_solochain_messages(
 	}
 	Ok(())
 }
+
+///
+pub fn calculate_merkle_root_of(public_keys: Vec<String>) -> Hash {
+	let public_keys: Vec<Vec<u8>> = public_keys
+		.into_iter()
+		.map(|hex_str| {
+			hex::decode(&hex_str[2..])
+				.map(|compressed_key| beefy_ecdsa_to_ethereum(&compressed_key))
+				.unwrap_or_default()
+		})
+		.collect();
+	merkle_root::<Keccak256, _, _>(public_keys)
+}
