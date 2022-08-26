@@ -129,29 +129,28 @@ pub struct LightClient {
 	pub in_process_state: Option<InProcessState>,
 }
 
-// Initialize light client using the BeefyId of the initial validator set.
-pub fn new(initial_public_keys: Vec<String>) -> LightClient {
-	let initial_public_keys: Vec<Vec<u8>> = initial_public_keys
-		.into_iter()
-		.map(|hex_str| {
-			hex::decode(&hex_str[2..])
-				.map(|compressed_key| beefy_ecdsa_to_ethereum(&compressed_key))
-				.unwrap_or_default()
-		})
-		.collect();
-
-	LightClient {
-		latest_commitment: None,
-		validator_set: BeefyNextAuthoritySet {
-			id: 0,
-			len: initial_public_keys.len() as u32,
-			root: merkle_root::<Keccak256, _, _>(initial_public_keys),
-		},
-		in_process_state: None,
-	}
-}
-
 impl LightClient {
+	// Initialize light client using the BeefyId of the initial validator set.
+	pub fn new(initial_public_keys: Vec<String>) -> Self {
+		let initial_public_keys: Vec<Vec<u8>> = initial_public_keys
+			.into_iter()
+			.map(|hex_str| {
+				hex::decode(&hex_str[2..])
+					.map(|compressed_key| beefy_ecdsa_to_ethereum(&compressed_key))
+					.unwrap_or_default()
+			})
+			.collect();
+
+		Self {
+			latest_commitment: None,
+			validator_set: BeefyNextAuthoritySet {
+				id: 0,
+				len: initial_public_keys.len() as u32,
+				root: merkle_root::<Keccak256, _, _>(initial_public_keys),
+			},
+			in_process_state: None,
+		}
+	}
 	// Import a signed commitment and update the state of light client.
 	pub fn update_state(
 		&mut self,
