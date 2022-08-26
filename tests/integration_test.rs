@@ -300,7 +300,7 @@ fn maximum_validators_test() {
 		let validator_address = beefy_ecdsa_to_ethereum(&pubkey.serialize());
 		// println!("validator_address: {:?}", validator_address);
 		initial_public_keys.push(validator_address);
-		let (recover_id, signature) = secp.sign_recoverable(&msg, &privkey).serialize_compact();
+		let (recover_id, signature) = secp.sign_ecdsa_recoverable(&msg, &privkey).serialize_compact();
 
 		let mut buf = [0_u8; 65];
 		buf[0..64].copy_from_slice(&signature[..]);
@@ -364,7 +364,7 @@ fn update_state_in_multiple_steps() {
 		let validator_address = beefy_ecdsa_to_ethereum(&pubkey.serialize());
 		// println!("validator_address: {:?}", validator_address);
 		initial_public_keys.push(validator_address);
-		let (recover_id, signature) = secp.sign_recoverable(&msg, &privkey).serialize_compact();
+		let (recover_id, signature) = secp.sign_ecdsa_recoverable(&msg, &privkey).serialize_compact();
 
 		let mut buf = [0_u8; 65];
 		buf[0..64].copy_from_slice(&signature[..]);
