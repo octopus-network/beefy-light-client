@@ -1,13 +1,12 @@
 use beefy_light_client::{
 	beefy_ecdsa_to_ethereum,
-	LightClient,
 	commitment::{
 		known_payload_ids::MMR_ROOT_ID, Commitment, Payload, Signature, SignedCommitment,
 	},
 	header::{Digest, Header},
 	mmr::{MmrLeaf, MmrLeafProof},
 	validator_set::BeefyNextAuthoritySet,
-	ValidatorMerkleProof,
+	LightClient, ValidatorMerkleProof,
 };
 use beefy_merkle_tree::{merkle_proof, merkle_root, Keccak256};
 use codec::{Decode, Encode};

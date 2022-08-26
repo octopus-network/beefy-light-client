@@ -185,7 +185,9 @@ impl LightClient {
 		}
 
 		// get mmr root from commitment palyload
-		let mmr_root: [u8; 32] = signed_commitment.commitment.clone()
+		let mmr_root: [u8; 32] = signed_commitment
+			.commitment
+			.clone()
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
@@ -214,7 +216,8 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(MmrLeaf, SignedCommitment), Error> {
-		let (mmr_leaf, signed_commitment) = self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
+		let (mmr_leaf, signed_commitment) =
+			self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
 		let SignedCommitment { commitment, signatures } = signed_commitment.clone();
 		let commitment_hash = commitment.hash();
 		// verify commitment and signatures
@@ -238,8 +241,13 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let (mmr_leaf, signed_commitment) =
-			self.verify_mmr_lef_with_verify_commitment_and_signature(signed_commitment, validator_proofs, mmr_leaf, mmr_proof)?;
+		let (mmr_leaf, signed_commitment) = self
+			.verify_mmr_lef_with_verify_commitment_and_signature(
+				signed_commitment,
+				validator_proofs,
+				mmr_leaf,
+				mmr_proof,
+			)?;
 
 		// update the latest commitment, including mmr_root
 		self.latest_commitment = Some(signed_commitment.commitment);
@@ -260,8 +268,8 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		
-		let (mmr_leaf, signed_commitment) = self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
+		let (mmr_leaf, signed_commitment) =
+			self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
 
 		let commitment_hash = signed_commitment.commitment.hash();
 
