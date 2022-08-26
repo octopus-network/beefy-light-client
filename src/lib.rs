@@ -151,25 +151,32 @@ impl LightClient {
 			in_process_state: None,
 		}
 	}
-	// Import a signed commitment and update the state of light client.
-	pub fn update_state(
-		&mut self,
+
+	fn verify_mmr_leaf(
+		&self,
 		signed_commitment: &[u8],
-		validator_proofs: &[ValidatorMerkleProof],
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
-	) -> Result<(), Error> {
+	) -> Result<(MmrLeaf, SignedCommitment), Error> {
+		// Deserlized vector<u8> signed_commitment to SignedCommitment
 		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
 			.map_err(|_| Error::InvalidSignedCommitment)?;
 
+		// check LightClient's latest commitment with signed commitment
+		// if LightClient's commitment `>` SignedCommitment's commitment
+		// LightClient'a Commitment have already updated(Error::COmmitmentAlreadyUpdated)
 		if let Some(latest_commitment) = &self.latest_commitment {
 			if signed_commitment.commitment <= *latest_commitment {
 				return Err(Error::CommitmentAlreadyUpdated)
 			}
 		}
 
+		// Get all signature from signed_commitment
 		let signatures_count =
 			signed_commitment.signatures.iter().filter(|&sig| sig.is_some()).count();
+		// Compatr LightClient's validator set length with Signatures Count
+		// signatures length `<` a half of LightClient's validator set length
+		// will report this error(InvalidNumberOfSignatures)
 		if signatures_count < (self.validator_set.len / 2) as usize {
 			return Err(Error::InvalidNumberOfSignatures {
 				expected: (self.validator_set.len / 2) as usize,
@@ -177,8 +184,40 @@ impl LightClient {
 			})
 		}
 
-		let SignedCommitment { commitment, signatures } = signed_commitment;
+		// get mmr root from commitment palyload
+		let mmr_root: [u8; 32] = signed_commitment.commitment.clone()
+			.payload
+			.get_decoded(&MMR_ROOT_ID)
+			.ok_or(Error::InvalidCommitmentPayload)?;
+		// Deserlized MmrLeafProof from mmr_proof(Vector<u8>)
+		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
+			.map_err(|_| Error::CantDecodeMmrProof)?;
+		// Deserlized MmrLeaf from mmr_leaf(Vector<u8>)
+		let mmr_leaf: Vec<u8> =
+			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
+		let mmr_leaf: MmrLeaf =
+			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		// verify mmr_leaf used by mmr_root and mmr_hash
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		if !result {
+			return Err(Error::InvalidMmrLeafProof)
+		}
+
+		Ok((mmr_leaf, signed_commitment))
+	}
+
+	fn verify_mmr_lef_with_verify_commitment_and_signature(
+		&self,
+		signed_commitment: &[u8],
+		validator_proofs: &[ValidatorMerkleProof],
+		mmr_leaf: &[u8],
+		mmr_proof: &[u8],
+	) -> Result<(MmrLeaf, SignedCommitment), Error> {
+		let (mmr_leaf, signed_commitment) = self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
+		let SignedCommitment { commitment, signatures } = signed_commitment.clone();
 		let commitment_hash = commitment.hash();
+		// verify commitment and signatures
 		LightClient::verify_commitment_signatures(
 			&commitment_hash,
 			&signatures,
@@ -187,24 +226,23 @@ impl LightClient {
 			0,
 			signatures.len(),
 		)?;
-		let mmr_root: [u8; 32] = commitment
-			.payload
-			.get_decoded(&MMR_ROOT_ID)
-			.ok_or(Error::InvalidCommitmentPayload)?;
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
-		if !result {
-			return Err(Error::InvalidMmrLeafProof)
-		}
+
+		Ok((mmr_leaf, signed_commitment))
+	}
+
+	// Import a signed commitment and update the state of light client.
+	pub fn update_state(
+		&mut self,
+		signed_commitment: &[u8],
+		validator_proofs: &[ValidatorMerkleProof],
+		mmr_leaf: &[u8],
+		mmr_proof: &[u8],
+	) -> Result<(), Error> {
+		let (mmr_leaf, signed_commitment) =
+			self.verify_mmr_lef_with_verify_commitment_and_signature(signed_commitment, validator_proofs, mmr_leaf, mmr_proof)?;
 
 		// update the latest commitment, including mmr_root
-		self.latest_commitment = Some(commitment);
+		self.latest_commitment = Some(signed_commitment.commitment);
 
 		// update validator_set
 		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
@@ -222,40 +260,8 @@ impl LightClient {
 		mmr_leaf: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
-		let signed_commitment = SignedCommitment::decode(&mut &signed_commitment[..])
-			.map_err(|_| Error::InvalidSignedCommitment)?;
-
-		if let Some(latest_commitment) = &self.latest_commitment {
-			if signed_commitment.commitment <= *latest_commitment {
-				return Err(Error::CommitmentAlreadyUpdated)
-			}
-		}
-
-		let signatures_count =
-			signed_commitment.signatures.iter().filter(|&sig| sig.is_some()).count();
-		if signatures_count < (self.validator_set.len / 2) as usize {
-			return Err(Error::InvalidNumberOfSignatures {
-				expected: (self.validator_set.len / 2) as usize,
-				got: signatures_count,
-			})
-		}
-
-		let mmr_root: [u8; 32] = signed_commitment
-			.commitment
-			.payload
-			.get_decoded(&MMR_ROOT_ID)
-			.ok_or(Error::InvalidCommitmentPayload)?;
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
-		if !result {
-			return Err(Error::InvalidMmrLeafProof)
-		}
+		
+		let (mmr_leaf, signed_commitment) = self.verify_mmr_leaf(signed_commitment, mmr_leaf, mmr_proof)?;
 
 		let commitment_hash = signed_commitment.commitment.hash();
 

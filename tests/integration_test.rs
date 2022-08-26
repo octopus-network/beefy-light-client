@@ -1,11 +1,11 @@
 use beefy_light_client::{
 	beefy_ecdsa_to_ethereum,
+	LightClient,
 	commitment::{
 		known_payload_ids::MMR_ROOT_ID, Commitment, Payload, Signature, SignedCommitment,
 	},
 	header::{Digest, Header},
 	mmr::{MmrLeaf, MmrLeafProof},
-	new,
 	validator_set::BeefyNextAuthoritySet,
 	ValidatorMerkleProof,
 };
@@ -28,7 +28,7 @@ fn update_state_works() {
 		"0x031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa".to_string(), // Eve
 	];
 
-	let mut lc = new(public_keys);
+	let mut lc = LightClient::new(public_keys);
 	println!("light client: {:?}", lc);
 
 	let alice_pk = beefy_ecdsa_to_ethereum(
@@ -206,7 +206,7 @@ fn verify_solochain_messages_works() {
 		"0x031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa".to_string(), // Eve
 	];
 
-	let mut lc = new(public_keys);
+	let mut lc = LightClient::new(public_keys);
 	let payload = Payload::new(
 		MMR_ROOT_ID,
 		hex!("67678b4a811dc055ff865fdfdda11c7464a9c77a988af4fcdea92e38ae6c6320").to_vec(),
@@ -311,7 +311,7 @@ fn maximum_validators_test() {
 	}
 	let encoded_signed_commitment = signed_commitment.encode();
 
-	let mut lc = new(vec!["0x00".to_string()]);
+	let mut lc = LightClient::new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
@@ -375,7 +375,7 @@ fn update_state_in_multiple_steps() {
 	}
 	let encoded_signed_commitment = signed_commitment.encode();
 
-	let mut lc = new(vec!["0x00".to_string()]);
+	let mut lc = LightClient::new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
