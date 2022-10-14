@@ -40,8 +40,9 @@ pub struct MmrLeaf {
 	pub parent_number_and_hash: (u32, Hash),
 	/// A merkle root of the next BEEFY authority set.
 	pub beefy_next_authority_set: BeefyNextAuthoritySet,
-	/// A merkle root of all registered parachain heads.
-	pub parachain_heads: Hash,
+	/// Arbitrary extra leaf data to be used by downstream pallets to include custom data in the
+	/// [`MmrLeaf`]
+	pub leaf_extra: Vec<u8>,
 }
 
 /// A MMR proof data for one of the leaves.
@@ -96,12 +97,12 @@ struct HashMerger;
 impl mmr_lib::Merge for HashMerger {
 	type Item = Hash;
 
-	fn merge(left: &Self::Item, right: &Self::Item) -> mmr_lib::Result<Self::Item> {
+	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
 		let mut combined = [0_u8; 64];
 		combined[0..32].copy_from_slice(&left[..]);
 		combined[32..64].copy_from_slice(&right[..]);
 
-		Ok(Keccak256::hash(&combined))
+		Keccak256::hash(&combined)
 	}
 }
 
@@ -123,37 +124,6 @@ pub fn verify_leaf_proof(
 mod tests {
 	use super::*;
 	use hex_literal::hex;
-
-	#[test]
-	fn encode_mmr_leaf_works() {
-		let encoded_mmr_leaf = vec![
-			37, 0, 0, 0, 0, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-			69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0,
-			0, 0, 1, 177, 167, 66, 88, 151, 115, 252, 5, 76, 143, 80, 33, 164, 86, 49, 111, 252,
-			236, 3, 112, 178, 86, 120, 176, 105, 110, 17, 109, 30, 249, 174, 237, 137, 60, 143,
-			140, 200, 113, 149, 165, 212, 210, 128, 91, 1, 21, 6, 50, 32, 54, 188, 172, 231, 150,
-			66, 170, 62, 148, 171, 67, 30, 68, 46,
-		];
-		let mmr_leaf = MmrLeaf {
-			version: MmrLeafVersion::new(1, 5),
-			parent_number_and_hash: (0_u32, [0x45; 32]),
-			beefy_next_authority_set: BeefyNextAuthoritySet {
-				id: 1,
-				len: 2,
-				root: hex!("01b1a742589773fc054c8f5021a456316ffcec0370b25678b0696e116d1ef9ae")
-					.into(),
-			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
-		};
-		assert_eq!(
-			mmr_leaf.encode(),
-			encoded_mmr_leaf,
-			"encoded mmr leaf should be equal to the expected one"
-		);
-	}
 
 	#[test]
 	fn verify_leaf_proof_works_1() {

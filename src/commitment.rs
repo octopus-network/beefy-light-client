@@ -300,6 +300,26 @@ impl Decode for SignedCommitment {
 	}
 }
 
+/// A [SignedCommitment] with a version number.
+///
+/// This variant will be appended to the block justifications for the block
+/// for which the signed commitment has been generated.
+///
+/// Note that this enum is subject to change in the future with introduction
+/// of additional cryptographic primitives to BEEFY.
+#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+pub enum VersionedFinalityProof {
+	#[codec(index = 1)]
+	/// Current active version
+	V1(SignedCommitment),
+}
+
+impl From<SignedCommitment> for VersionedFinalityProof {
+	fn from(commitment: SignedCommitment) -> Self {
+		VersionedFinalityProof::V1(commitment)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
