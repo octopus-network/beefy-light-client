@@ -13,6 +13,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(
@@ -57,9 +58,20 @@ pub mod known_payload_ids {
 /// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
 /// support a subset of possible values.
 #[derive(
-	Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, BorshDeserialize, BorshSerialize,
+	Decode,
+	Encode,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Ord,
+	PartialOrd,
+	BorshDeserialize,
+	BorshSerialize,
+	Serialize,
+	Deserialize,
 )]
-pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
+pub struct Payload(pub Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
 	/// Construct a new payload given an initial vallue
