@@ -13,6 +13,8 @@ blake2-rfc = { version = "0.2.18", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"] }
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.3.2", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
