@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 
 use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use codec::Decode;
 use commitment::{
 	known_payload_ids::MMR_ROOT_ID, Commitment, Signature, SignedCommitment, VersionedFinalityProof,
@@ -97,7 +98,7 @@ pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
 	.unwrap_or_default()
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct ValidatorMerkleProof {
 	/// Proof items (does not contain the leaf hash, nor the root obviously).
 	///
