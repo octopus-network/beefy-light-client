@@ -1,11 +1,12 @@
 use beefy_merkle_tree::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use codec::{Decode, Encode};
 
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
-#[derive(Clone, Debug, Default, Encode, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(Clone, Debug, Default, Encode, Decode, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct BeefyNextAuthoritySet {
 	/// Id of the next set.
 	///

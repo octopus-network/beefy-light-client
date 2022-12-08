@@ -116,7 +116,7 @@ pub struct ValidatorMerkleProof {
 	pub leaf: Vec<u8>,
 }
 
-#[derive(Debug, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct InProcessState {
 	pub position: usize,
 	commitment_hash: Hash,
@@ -125,7 +125,7 @@ pub struct InProcessState {
 	validator_set: BeefyNextAuthoritySet,
 }
 
-#[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
+#[derive(Debug, Default, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct LightClient {
 	pub latest_commitment: Option<Commitment>,
 	pub validator_set: BeefyNextAuthoritySet,

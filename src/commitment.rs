@@ -10,6 +10,8 @@ use std::cmp;
 
 use beefy_merkle_tree::{Hash, Keccak256};
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;
 use scale_info::TypeInfo;
@@ -24,10 +26,15 @@ use scale_info::TypeInfo;
 	Decode,
 	BorshDeserialize,
 	BorshSerialize,
+	Serialize, 
+	Deserialize,
 	TypeInfo,
 	MaxEncodedLen,
 )]
-pub struct Signature(pub [u8; 65]);
+pub struct Signature(
+	#[serde(with = "BigArray")]
+	pub [u8; 65]
+);
 
 impl From<&str> for Signature {
 	fn from(hex_str: &str) -> Self {
@@ -57,7 +64,7 @@ pub mod known_payload_ids {
 /// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
 /// support a subset of possible values.
 #[derive(
-	Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, BorshDeserialize, BorshSerialize,
+	Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, BorshDeserialize, BorshSerialize, Serialize, Deserialize
 )]
 pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
@@ -99,7 +106,7 @@ impl Payload {
 /// height [block_number](Commitment::block_number).
 /// GRANDPA validators collect signatures on commitments and a stream of such signed commitments
 /// (see [SignedCommitment]) forms the BEEFY protocol.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct Commitment {
 	///  A collection of payloads to be signed, see [`Payload`] for details.
 	///
@@ -157,7 +164,7 @@ impl Commitment {
 /// Note that SCALE-encoding of the structure is optimized for size efficiency over the wire,
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
 /// `CompactSignedCommitment` struct.
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct SignedCommitment {
 	/// The commitment signatures are collected for.
 	pub commitment: Commitment,
