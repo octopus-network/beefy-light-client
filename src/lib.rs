@@ -9,25 +9,31 @@ use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use beefy_merkle_tree::{merkle_root, verify_proof, Keccak256};
+use beefy_merkle_tree::{merkle_root, verify_proof};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::Decode;
 use commitment::{
 	known_payload_ids::MMR_ROOT_ID, Commitment, Signature, SignedCommitment, VersionedFinalityProof,
 };
+use hash_db::Hasher;
 use header::Header;
 use mmr::MmrLeaf;
+use sp_runtime::traits::Keccak256;
 use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
 
-pub use beefy_merkle_tree::{Hash, MerkleProof};
+pub use beefy_merkle_tree::MerkleProof;
+use sp_core::H256;
 
 pub mod commitment;
 pub mod header;
+pub mod keecak256;
 pub mod mmr;
+pub mod parachain;
 pub mod simplified_mmr;
 pub mod validator_set;
 
 pub use commitment::BeefyPayloadId;
+use crate::parachain::ParachainsUpdateProof;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -82,7 +88,14 @@ pub enum Error {
 	ValidatorNotFound,
 	///
 	MissingInProcessState,
+	///
+	Custom(String),
 }
+
+/// Supported hashing output size.
+///
+/// The size is restricted to 32 bytes to allow for a more optimised implementation.
+pub type Hash = [u8; 32];
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
@@ -147,7 +160,7 @@ pub fn new(initial_public_keys: Vec<String>) -> LightClient {
 		validator_set: BeefyNextAuthoritySet {
 			id: 0,
 			len: initial_public_keys.len() as u32,
-			root: merkle_root::<Keccak256, _, _>(initial_public_keys),
+			root: merkle_root::<Keccak256, _>(initial_public_keys).into(),
 		},
 		in_process_state: None,
 	}
@@ -202,7 +215,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash.into(), mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -257,7 +270,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash.into(), mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -338,7 +351,7 @@ impl LightClient {
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
 		let header_digest = header.get_other().ok_or(Error::DigestNotFound)?;
 
-		let messages_hash = Keccak256::hash(messages);
+		let messages_hash: Hash = Keccak256::hash(messages).into();
 		if messages_hash != header_digest[..] {
 			return Err(Error::DigestNotMatch)
 		}
@@ -363,15 +376,15 @@ impl LightClient {
 			return Err(Error::HeaderHashNotMatch)
 		}
 
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash.into(), mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
 		Ok(())
 	}
 
-	pub fn verify_parachain_messages(&self) -> Result<(), Error> {
-		Ok(())
+	pub fn verify_parachain_messages(&self, parachain_update_proof : ParachainsUpdateProof) -> Result<(), Error> {
+		self.verify_parachain_headers(parachain_update_proof)
 	}
 
 	fn verify_commitment_signatures(
@@ -399,8 +412,13 @@ impl LightClient {
 				if validator_address == *proof.leaf {
 					found = true;
 					if !verify_proof::<Keccak256, _, _>(
-						validator_set_root,
-						proof.proof.clone(),
+						&H256::from(validator_set_root),
+						proof
+							.proof
+							.clone()
+							.into_iter()
+							.map(|value| H256::from(value))
+							.collect::<Vec<_>>(),
 						proof.number_of_leaves,
 						proof.leaf_index,
 						&proof.leaf,

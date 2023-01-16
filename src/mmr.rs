@@ -3,11 +3,12 @@ use alloc::vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use crate::BeefyNextAuthoritySet;
-use beefy_merkle_tree::{Hash, Keccak256};
+use crate::{BeefyNextAuthoritySet, Hash};
 use codec::{Decode, Encode};
+use hash_db::Hasher;
+use sp_runtime::traits::Keccak256;
 
-#[derive(Clone, Debug, Default, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MmrLeafVersion(pub u8);
 impl MmrLeafVersion {
 	/// Create new version object from `major` and `minor` components.
@@ -92,7 +93,8 @@ impl NodesUtils {
 	}
 }
 
-struct HashMerger;
+#[derive(Clone)]
+pub struct HashMerger;
 
 impl mmr_lib::Merge for HashMerger {
 	type Item = Hash;
@@ -102,7 +104,15 @@ impl mmr_lib::Merge for HashMerger {
 		combined[0..32].copy_from_slice(&left[..]);
 		combined[32..64].copy_from_slice(&right[..]);
 
-		Keccak256::hash(&combined)
+		Keccak256::hash(&combined).into()
+	}
+}
+
+impl rs_merkle::Hasher for HashMerger {
+	type Hash = Hash;
+
+	fn hash(data: &[u8]) -> Self::Hash {
+		Keccak256::hash(&data).into()
 	}
 }
 

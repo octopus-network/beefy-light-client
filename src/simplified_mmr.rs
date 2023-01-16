@@ -1,7 +1,9 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use beefy_merkle_tree::{Hash, Keccak256};
+use crate::Hash;
+use hash_db::Hasher;
+use sp_runtime::traits::Keccak256;
 
 // Get the value of the bit at the given 'index' in 'n'.
 // index should be validated beforehand to make sure it is less than 64
@@ -28,7 +30,7 @@ fn merkle_root(
 			combined[0..32].copy_from_slice(&current_hash);
 			combined[32..64].copy_from_slice(&sibling);
 		}
-		current_hash = Keccak256::hash(&combined);
+		current_hash = Keccak256::hash(&combined).into();
 	}
 
 	current_hash
