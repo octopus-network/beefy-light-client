@@ -1,12 +1,14 @@
-use beefy_merkle_tree::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
 
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
-#[derive(Clone, Debug, Default, Encode, Decode, BorshDeserialize, BorshSerialize)]
-pub struct BeefyNextAuthoritySet {
+// ref: https://github.com/paritytech/substrate/blob/49ba186c53c24a3ace99c55ecd75370d8e65da1f/primitives/consensus/beefy/src/mmr.rs#L105
+#[derive(
+	Clone, Debug, Default, Encode, Decode, BorshDeserialize, BorshSerialize, PartialEq, Eq,
+)]
+pub struct BeefyNextAuthoritySet<MerkleRoot> {
 	/// Id of the next set.
 	///
 	/// Id is required to correlate BEEFY signed commitments with the validator set.
@@ -24,5 +26,5 @@ pub struct BeefyNextAuthoritySet {
 	/// This is used by Light Clients to confirm that the commitments are signed by the correct
 	/// validator set. Light Clients using interactive protocol, might verify only subset of
 	/// signatures, hence don't require the full list here (will receive inclusion proofs).
-	pub root: Hash,
+	pub root: MerkleRoot,
 }

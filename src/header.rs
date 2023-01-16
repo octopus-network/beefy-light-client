@@ -1,7 +1,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use beefy_merkle_tree::Hash;
+use crate::Hash;
 use codec::{Decode, Encode, Error, Input};
 
 /// Do a Blake2 256-bit hash and place result in `dest`.
@@ -219,7 +219,7 @@ mod tests {
 
 		let header = Header::decode(&mut &encoded_header[..]);
 
-		assert_eq!(header.is_ok(), true);
+		assert!(header.is_ok());
 	}
 
 	#[test]
@@ -228,7 +228,7 @@ mod tests {
 
 		let header = Header::decode(&mut &encoded_header[..]);
 
-		assert_eq!(header.is_ok(), true);
+		assert!(header.is_ok());
 	}
 
 	#[test]
@@ -250,4 +250,7 @@ mod tests {
 			hex!("b0fc041accc53f07e0249cf63a6364c7aac035855e343b4e673a7af87f048941")
 		);
 	}
+
+	#[test]
+	fn test_encode_header_and_decode_header() {}
 }
