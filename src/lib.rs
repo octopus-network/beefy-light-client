@@ -32,8 +32,8 @@ pub mod parachain;
 pub mod simplified_mmr;
 pub mod validator_set;
 
-pub use commitment::BeefyPayloadId;
 use crate::parachain::ParachainsUpdateProof;
+pub use commitment::BeefyPayloadId;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -53,7 +53,7 @@ pub enum Error {
 	/// Next validator set has not been provided by any of the previous commitments.
 	MissingNextValidatorSetData,
 	/// Couldn't verify the proof against MMR root of the latest commitment.
-	InvalidMmrProof,
+	InvalidMmrProof(String),
 	///
 	InvalidSignature,
 	///
@@ -90,6 +90,8 @@ pub enum Error {
 	MissingInProcessState,
 	///
 	Custom(String),
+	///
+	DecodeHeaderFaild(String),
 }
 
 /// Supported hashing output size.
@@ -383,7 +385,10 @@ impl LightClient {
 		Ok(())
 	}
 
-	pub fn verify_parachain_messages(&self, parachain_update_proof : ParachainsUpdateProof) -> Result<(), Error> {
+	pub fn verify_parachain_messages(
+		&self,
+		parachain_update_proof: ParachainsUpdateProof,
+	) -> Result<(), Error> {
 		self.verify_parachain_headers(parachain_update_proof)
 	}
 

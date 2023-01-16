@@ -64,8 +64,8 @@ impl LightClient {
 		let mut mmr_leaves = Vec::new();
 
 		for parachain_header in parachain_headers {
-			let decoded_para_header =
-				Header::decode(&mut &*parachain_header.parachain_header).unwrap(); // TODO
+			let decoded_para_header = Header::decode(&mut &*parachain_header.parachain_header)
+				.map_err(|e| Error::DecodeHeaderFaild(e.to_string()))?;
 
 			// just to be safe skip genesis block if it's included, it has no timestamp
 			if decoded_para_header.number == 0 {
@@ -95,7 +95,7 @@ impl LightClient {
 					&[leaf_hash.into()],
 					parachain_header.heads_total_count as usize,
 				)
-				.map_err(|_| Error::Custom("InvalidMerkleProof".to_string()))?;
+				.map_err(|_| Error::Custom("Invalid Merkle Proof".to_string()))?;
 			// reconstruct leaf
 			let mmr_leaf = MmrLeaf {
 				version: parachain_header.partial_mmr_leaf.version,
@@ -131,12 +131,10 @@ impl LightClient {
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
 		if root != mmr_root_hash {
-			return Err(Error::InvalidMmrProof)
-			// return Err(Error::InvalidMmrProof {
-			// 	expected: trusted_client_state.mmr_root_hash,
-			// 	found: root,
-			// 	location: "verifying_parachain_headers_inclusion",
-			// })
+			return Err(Error::InvalidMmrProof(format!(
+				"expected: {:?}, found: {:?}, location: {}",
+				mmr_root_hash, root, "verify_parachain_headers"
+			)))
 		}
 		Ok(())
 	}
