@@ -13,7 +13,7 @@ use sp_runtime::traits::Keccak256;
 #[derive(sp_std::fmt::Debug, Clone, PartialEq, Eq, Encode, Decode)]
 /// Parachain headers update with proof
 pub struct ParachainsUpdateProof {
-	/// Parachai headers
+	/// Parachain headers
 	pub parachain_headers: Vec<ParachainHeader>,
 	/// Mmr Batch proof for parachain headers
 	pub mmr_proof: sp_mmr_primitives::Proof<H256>,
@@ -65,7 +65,7 @@ impl LightClient {
 
 		for parachain_header in parachain_headers {
 			let decoded_para_header = Header::decode(&mut &*parachain_header.parachain_header)
-				.map_err(|e| Error::DecodeHeaderFaild(e.to_string()))?;
+				.map_err(|e| Error::Custom(e.to_string()))?;
 
 			// just to be safe skip genesis block if it's included, it has no timestamp
 			if decoded_para_header.number == 0 {
@@ -81,7 +81,7 @@ impl LightClient {
 				&&*parachain_header.extrinsic_proof,
 				&vec![(timestamp_ext_key, Some(&*parachain_header.timestamp_extrinsic))],
 			)
-			.map_err(|_| Error::Custom(format!("Invalid extrinsic proof")))?;
+			.map_err(|_| Error::Custom("Invalid extrinsic proof".to_string()))?;
 
 			let pair = (parachain_header.para_id, parachain_header.parachain_header);
 			let leaf_bytes = pair.encode();
@@ -122,7 +122,7 @@ impl LightClient {
 			mmr_proof.items.clone().into_iter().map(|val| val.into()).collect(),
 		);
 
-		let root = proof.calculate_root(mmr_leaves).unwrap(); // TODO
+		let root = proof.calculate_root(mmr_leaves).map_err(|e| Error::Custom(e.to_string()))?;
 		let mmr_root_hash: [u8; 32] = self
 			.latest_commitment
 			.as_ref()
