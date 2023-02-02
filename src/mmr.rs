@@ -2,9 +2,9 @@
 use alloc::vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use hash_db::Hasher;
 
-use crate::BeefyNextAuthoritySet;
-use beefy_merkle_tree::{Hash, Keccak256};
+use crate::{keccak256::Keccak256, BeefyNextAuthoritySet, Hash};
 use codec::{Decode, Encode};
 
 #[derive(Clone, Debug, Default, Encode, Decode)]
@@ -97,12 +97,12 @@ struct HashMerger;
 impl mmr_lib::Merge for HashMerger {
 	type Item = Hash;
 
-	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
+	fn merge(left: &Self::Item, right: &Self::Item) -> mmr_lib::Result<Self::Item> {
 		let mut combined = [0_u8; 64];
 		combined[0..32].copy_from_slice(&left[..]);
 		combined[32..64].copy_from_slice(&right[..]);
 
-		Keccak256::hash(&combined)
+		Ok(Keccak256::hash(&combined))
 	}
 }
 

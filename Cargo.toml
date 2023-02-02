@@ -5,28 +5,35 @@ authors = ["Julian Sun <julian@oct.network>"]
 edition = "2021"
 
 [dependencies]
-borsh =  { version = "0.9.3", default-features = false }
+borsh =  { version = "0.10.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-beefy-merkle-tree = { git = "https://github.com/octopus-network/substrate.git", branch = "octopus-v0.9.30", features = ["keccak"], default-features = false }
+binary-merkle-tree = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 blake2-rfc = { version = "0.2.18", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"] }
-mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.3.2", default-features = false }
+mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
+tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+hash256-std-hasher = { version = "0.15.2", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
 rand = { version = "0.8" }
-secp256k1-test = { package = "secp256k1", version = "0.24.0", features = ["rand-std", "recovery"] }
+secp256k1-test = { package = "secp256k1", version = "0.26.0", features = ["rand-std", "recovery"] }
+array-bytes = "4.1"
 
 [features]
 default = ["std"]
 std = [
-	"beefy-merkle-tree/std",
+	"binary-merkle-tree/std",
 	"blake2-rfc/std",
 	"codec/std",
 	"hex/std",
 	"libsecp256k1/std",
 	"mmr-lib/std",
 	"borsh/std",
+	"hash256-std-hasher/std",
+	"hash-db/std",
+	# "sp-io/std",
 ]

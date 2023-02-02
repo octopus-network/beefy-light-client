@@ -4,11 +4,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use core::cmp;
+use hash_db::Hasher;
 
 #[cfg(feature = "std")]
 use std::cmp;
 
-use beefy_merkle_tree::{Hash, Keccak256};
+use crate::{keccak256::Keccak256, Hash};
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;

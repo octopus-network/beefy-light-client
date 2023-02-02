@@ -1,4 +1,4 @@
-use beefy_merkle_tree::Hash;
+use crate::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
 

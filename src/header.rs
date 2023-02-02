@@ -1,7 +1,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use beefy_merkle_tree::Hash;
+use crate::Hash;
 use codec::{Decode, Encode, Error, Input};
 
 /// Do a Blake2 256-bit hash and place result in `dest`.

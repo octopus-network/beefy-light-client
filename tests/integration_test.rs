@@ -2,12 +2,13 @@ use beefy_light_client::{
 	beefy_ecdsa_to_ethereum,
 	commitment::{Signature, SignedCommitment, VersionedFinalityProof},
 	header::{Digest, Header},
+	keccak256::Keccak256,
 	mmr::{MmrLeaf, MmrLeafProof},
 	new,
 	validator_set::BeefyNextAuthoritySet,
 	ValidatorMerkleProof,
 };
-use beefy_merkle_tree::{merkle_proof, merkle_root, Keccak256};
+use binary_merkle_tree::{merkle_proof, merkle_root};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use secp256k1_test::{rand::thread_rng, Message as SecpMessage, Secp256k1};
@@ -338,7 +339,7 @@ fn maximum_validators_test() {
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
-		root: merkle_root::<Keccak256, _, _>(initial_public_keys.clone()),
+		root: merkle_root::<Keccak256, _>(initial_public_keys.clone()),
 	};
 	let mut validator_proofs = Vec::new();
 	for i in 0..initial_public_keys.len() {
@@ -402,7 +403,7 @@ fn update_state_in_multiple_steps() {
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
-		root: merkle_root::<Keccak256, _, _>(initial_public_keys.clone()),
+		root: merkle_root::<Keccak256, _>(initial_public_keys.clone()),
 	};
 	let mut validator_proofs = Vec::new();
 	for i in 0..initial_public_keys.len() {
