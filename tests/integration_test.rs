@@ -12,8 +12,6 @@ use binary_merkle_tree::{merkle_proof, merkle_root};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use secp256k1_test::{rand::thread_rng, Message as SecpMessage, Secp256k1};
-use std::convert::TryInto;
-
 #[test]
 fn update_state_works() {
 	// $ subkey inspect --scheme ecdsa //Alice
@@ -55,9 +53,9 @@ fn update_state_works() {
 	let validator_proofs_1 = vec![
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde").into(),
-				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde"),
+				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 0,
@@ -65,9 +63,9 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7").into(),
-				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"),
+				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 1,
@@ -75,9 +73,9 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f").into(),
-				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f"),
+				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 2,
@@ -85,18 +83,16 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136").into(),
-				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136"),
+				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 3,
 			leaf: dave_pk.clone(),
 		},
 		ValidatorMerkleProof {
-			proof: vec![
-				hex!("2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519").into()
-			],
+			proof: vec![hex!("2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519")],
 			number_of_leaves: 5,
 			leaf_index: 4,
 			leaf: eve_pk.clone(),
@@ -138,9 +134,9 @@ fn update_state_works() {
 	let validator_proofs_2 = vec![
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde").into(),
-				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("f68aec7304bf37f340dae2ea20fb5271ee28a3128812b84a615da4789e458bde"),
+				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 0,
@@ -148,9 +144,9 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7").into(),
-				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"),
+				hex!("93c6c7e160154c8467b700c291a1d4da94ae9aaf1c5010003a6aa3e9b18657ab"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 1,
@@ -158,9 +154,9 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f").into(),
-				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("50bdd3ac4f54a04702a055c33303025b2038446c7334ed3b3341f310f052116f"),
+				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 2,
@@ -168,18 +164,16 @@ fn update_state_works() {
 		},
 		ValidatorMerkleProof {
 			proof: vec![
-				hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136").into(),
-				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402").into(),
-				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58").into(),
+				hex!("3eb799651607280e854bd2e42c1df1c8e4a6167772dfb3c64a813e40f6e87136"),
+				hex!("697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"),
+				hex!("55ca68207e72b7a7cd012364e03ac9ee560eb1b26de63f0ee42a649d74f3bf58"),
 			],
 			number_of_leaves: 5,
 			leaf_index: 3,
 			leaf: dave_pk,
 		},
 		ValidatorMerkleProof {
-			proof: vec![
-				hex!("2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519").into()
-			],
+			proof: vec![hex!("2145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe29056519")],
 			number_of_leaves: 5,
 			leaf_index: 4,
 			leaf: eve_pk,
@@ -251,16 +245,10 @@ fn verify_solochain_messages_works() {
 		hex!("044245454684032033570c5c16d54546ec9c8d4e59b910b966ddad4f039be0b005a2f6bebe6c4c");
 	let item3 = hex!("0542414245010168e56176997bd6db5b30ac082b0ee6ddffc1d33cb9484542514f52f6ccb966104c15d9d3af8377bf436aec02224228782350b04303e8b1d733b1c3535efc1283");
 	let header = Header {
-		parent_hash: hex!("af1dbf5877915673a52ded92627328eb405ea5535f8e8e4a0d11289f9c17fb2c")
-			.try_into()
-			.unwrap(),
+		parent_hash: hex!("af1dbf5877915673a52ded92627328eb405ea5535f8e8e4a0d11289f9c17fb2c"),
 		number: 0x1d,
-		state_root: hex!("79e4d81e201dbf5108b068d9af75419f2cf8df9f1771f018bd7e71271b212171")
-			.try_into()
-			.unwrap(),
-		extrinsics_root: hex!("7aecf3e03905fd945f4aa0a04d2baa7d879efc0206ae7ebd4296e65768c36825")
-			.try_into()
-			.unwrap(),
+		state_root: hex!("79e4d81e201dbf5108b068d9af75419f2cf8df9f1771f018bd7e71271b212171"),
+		extrinsics_root: hex!("7aecf3e03905fd945f4aa0a04d2baa7d879efc0206ae7ebd4296e65768c36825"),
 		digest: Digest {
 			logs: vec![
 				Decode::decode(&mut &item0[..]).unwrap(),

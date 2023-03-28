@@ -318,7 +318,7 @@ mod tests {
 	fn signature_from_hex_str_works() {
 		let signature_hex_str = "0x34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301";
 		let signature: Signature = signature_hex_str.into();
-		assert_eq!(signature, Signature(hex!("34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301").into()));
+		assert_eq!(signature, Signature(hex!("34c47a87fd892a2ed56f7f5708722548f7696578731c1119ba554c73c147433722da580d4daf04f5d13e1f4325a9639ad73aced975084982b5a97546cbf7bcc301")));
 	}
 
 	#[test]
@@ -333,7 +333,7 @@ mod tests {
 
 		let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
 
-		assert_eq!(signed_commitment.is_ok(), true);
+		assert!(signed_commitment.is_ok());
 	}
 
 	#[test]
@@ -1419,7 +1419,7 @@ mod tests {
 
 		let signed_commitment = SignedCommitment::decode(&mut &encoded_signed_commitment[..]);
 
-		assert_eq!(signed_commitment.is_ok(), true);
+		assert!(signed_commitment.is_ok());
 	}
 
 	#[test]

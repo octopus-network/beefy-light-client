@@ -219,7 +219,7 @@ mod tests {
 
 		let header = Header::decode(&mut &encoded_header[..]);
 
-		assert_eq!(header.is_ok(), true);
+		assert!(header.is_ok());
 	}
 
 	#[test]
@@ -228,7 +228,7 @@ mod tests {
 
 		let header = Header::decode(&mut &encoded_header[..]);
 
-		assert_eq!(header.is_ok(), true);
+		assert!(header.is_ok());
 	}
 
 	#[test]

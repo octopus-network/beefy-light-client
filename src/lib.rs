@@ -449,7 +449,7 @@ mod tests {
 			"14f213146a362c397545659ac7795926514696ad49565972d64964040394482c"
 		))
 		.unwrap();
-		let signature = Signature(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af73300").into());
+		let signature = Signature(hex!("3a481c251a7aa94b89e8160aa9073f74cc24570da13ec9f697a9a7c989943bed31b969b50c47675c11994fbdacb82707293976927922ec8c2124490e417af73300"));
 		let sig = libsecp256k1::Signature::parse_standard_slice(&signature.0[..64]).unwrap();
 		let public_key = libsecp256k1::recover(
 			&msg,
@@ -472,9 +472,9 @@ mod tests {
 					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
 				],
 				proof: vec![
-					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4"),
+					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1"),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
 				],
 				number_of_leaves: 5,
 				leaf_index: 0,
@@ -491,9 +491,9 @@ mod tests {
 					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
 				],
 				proof: vec![
-					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d").into(),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d"),
+					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1"),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
 				],
 				number_of_leaves: 5,
 				leaf_index: 1,
@@ -510,9 +510,9 @@ mod tests {
 					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
 				],
 				proof: vec![
-					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a"),
+					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7"),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
 				],
 				number_of_leaves: 5,
 				leaf_index: 2,
@@ -757,20 +757,16 @@ mod tests {
 		];
 		let root: [u8; 32] = array_bytes::hex2array_unchecked(
 			"7b2c6eebec6e85b2e272325a11c31af71df52bc0534d2d4f903e0ced191f022e",
-		)
-		.into();
+		);
 
-		let data = addresses
-			.into_iter()
-			.map(|address| array_bytes::hex2bytes_unchecked(&address))
-			.collect::<Vec<_>>();
+		let data = addresses.into_iter().map(array_bytes::hex2bytes_unchecked).collect::<Vec<_>>();
 
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
 			assert_eq!(
-				array_bytes::bytes2hex("", &proof.root.as_ref()),
-				array_bytes::bytes2hex("", &root.as_ref())
+				array_bytes::bytes2hex("", proof.root.as_ref()),
+				array_bytes::bytes2hex("", root.as_ref())
 			);
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
@@ -794,20 +790,16 @@ mod tests {
 				proof: vec![
 					array_bytes::hex2array_unchecked(
 						"340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"
-					)
-					.into(),
+					),
 					array_bytes::hex2array_unchecked(
 						"ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"
-					)
-					.into(),
+					),
 					array_bytes::hex2array_unchecked(
 						"1fad92ed8d0504ef6c0231bbbeeda960a40693f297c64e87b582beb92ecfb00f"
-					)
-					.into(),
+					),
 					array_bytes::hex2array_unchecked(
 						"0b84c852cbcf839d562d826fd935e1b37975ccaa419e1def8d219df4b83dcbf4"
-					)
-					.into(),
+					),
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
