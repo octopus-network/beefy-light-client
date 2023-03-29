@@ -442,9 +442,8 @@ impl LightClient {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{commitment::Signature, mmr::MmrLeafProof};
+	use crate::commitment::Signature;
 	use binary_merkle_tree::merkle_proof;
-	use hash_db::Hasher;
 	use hex_literal::hex;
 
 	#[test]
