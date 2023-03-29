@@ -90,6 +90,10 @@ pub enum Error {
 	ValidatorNotFound,
 	///
 	MissingInProcessState,
+	///
+	MmrVerifyErr(mmr_lib::Error),
+	/// other
+	Other(String),
 }
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
@@ -210,7 +214,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -265,7 +269,7 @@ impl LightClient {
 		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
 		let mmr_leaf: MmrLeaf =
 			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -371,7 +375,7 @@ impl LightClient {
 			return Err(Error::HeaderHashNotMatch)
 		}
 
-		let result = mmr::verify_leaf_proof(mmr_root, mmr_leaf_hash, mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -464,7 +468,7 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore = "test failed"]
+	#[ignore = "test failed test data need to udpate"]
 	fn verify_validator_proofs_works() {
 		let proofs = vec![
 			MerkleProof {
@@ -530,9 +534,9 @@ mod tests {
 					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
 				],
 				proof: vec![
-					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c").into(),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7").into(),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9").into(),
+					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c"),
+					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7"),
+					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
 				],
 				number_of_leaves: 5,
 				leaf_index: 3,
@@ -550,8 +554,7 @@ mod tests {
 				],
 				proof: vec![hex!(
 					"a33c1baaa379963ee43c3a7983a3157080c32a462a9774f1fe6d2f0480428e5c"
-				)
-				.into()],
+				)],
 				number_of_leaves: 5,
 				leaf_index: 4,
 				leaf: libsecp256k1::PublicKey::parse_slice(
@@ -575,14 +578,49 @@ mod tests {
 	}
 
 	#[test]
+	fn should_generate_and_verify_proof_large() {
+		let mut data = vec![];
+		for i in 1..16 {
+			for c in 'a'..='z' {
+				if c as usize % i != 0 {
+					data.push(c.to_string());
+				}
+			}
+
+			for l in 0..data.len() {
+				// when
+				let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
+				// then
+				assert!(verify_proof::<Keccak256, _, _>(
+					&proof.root,
+					proof.proof,
+					data.len(),
+					proof.leaf_index,
+					&proof.leaf
+				));
+			}
+		}
+	}
+
+	#[test]
 	fn verify_leaf_proof_works() {
-		let root_hash = hex!("aa0b510cee4270257f6362a353262253de422f069826b5af4398377a4eee03f7");
-		let leaf = hex!("c5010058000000e5ac4bf69913974aeb79779c77d6e22d40575a63d4bca9044b501b12916a6090010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a20000000000000000000000000000000000000000000000000000000000000000");
+		// 0xdb9c2d60061a05d315fa34d50041747ccbe1c2a4484379252f8ee323e847187b
+		// {
+		// blockHash: 0xa4d23ebaf6ca014e9fab15f036cc4c6155a5f93cb6aa93f7b4a577c9babd7363
+		// leaves: 0x04c5010021060000a04afb1823edb3a94a3e3f9e3176d83752624c3b40cb2ba1056178ff3f5f7bf19d0000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000
+		// proof: 0x042106000000000000260600000000000018217af62f98ac6dc8c452fc3d352ef249b01ca622ccc438ebcb6679ec49cdbc4fe9164b24040e0edab7931c8a476bdf25cfde047df325737a2b77268c4576d066b41ee9ff4492dbc2baa6572624a6148464cb4f93578eaa5aefc746786a7bebd409857d69a9ca2a63395633136d02d40ae95da7319402d0a0ba0afe3c6bef986974cb06cc1ce21562fa113ca3d265626b62fddd6e395f959d13f5c3fb997eba811c25c4c8dbb043eeae4c5cb4db11a8aee6aebba85f9594c9df9d7a5c809f6f32
+		// }
+		// let root_hash: [u8; 32] = array_bytes::hex2array_unchecked(
+		// "db9c2d60061a05d315fa34d50041747ccbe1c2a4484379252f8ee323e847187b",
+		// );
+		let root_hash = hex!("db9c2d60061a05d315fa34d50041747ccbe1c2a4484379252f8ee323e847187b");
+		let leaf = hex!("04c5010021060000a04afb1823edb3a94a3e3f9e3176d83752624c3b40cb2ba1056178ff3f5f7bf19d0000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
 		let leaf: Vec<u8> = Decode::decode(&mut &leaf[..]).unwrap();
 		let mmr_leaf_hash = Keccak256::hash(&leaf[..]);
-		let proof = hex!("580000000000000059000000000000000c638bedc14bfdb5cfb8eb7313f311859820948868afbaa340de2a467f4eec130cd789e49d14c7068ec08e0b5680c5e01b372d28802acaeba7b63a5e1482d5147c0e395b48e5a134164c4dac0b30fc8bfd56756329824e6c70c7325769c92c1ff8");
+		let proof = hex!("042106000000000000260600000000000018217af62f98ac6dc8c452fc3d352ef249b01ca622ccc438ebcb6679ec49cdbc4fe9164b24040e0edab7931c8a476bdf25cfde047df325737a2b77268c4576d066b41ee9ff4492dbc2baa6572624a6148464cb4f93578eaa5aefc746786a7bebd409857d69a9ca2a63395633136d02d40ae95da7319402d0a0ba0afe3c6bef986974cb06cc1ce21562fa113ca3d265626b62fddd6e395f959d13f5c3fb997eba811c25c4c8dbb043eeae4c5cb4db11a8aee6aebba85f9594c9df9d7a5c809f6f32");
 		let mmr_proof = MmrLeafProof::decode(&mut &proof[..]).unwrap();
-		assert_eq!(mmr::verify_leaf_proof(root_hash, mmr_leaf_hash, mmr_proof), Ok(true));
+		println!("proof: {mmr_proof:?}");
+		assert_eq!(mmr::verify_leaf_proof(root_hash, vec![mmr_leaf_hash], mmr_proof), Ok(true));
 	}
 
 	#[test]

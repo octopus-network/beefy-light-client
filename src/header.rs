@@ -250,4 +250,7 @@ mod tests {
 			hex!("b0fc041accc53f07e0249cf63a6364c7aac035855e343b4e673a7af87f048941")
 		);
 	}
+
+	#[test]
+	fn test_encode_header_and_decode_header() {}
 }
