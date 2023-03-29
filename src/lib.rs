@@ -133,13 +133,13 @@ pub struct InProcessState {
 	commitment_hash: Hash,
 	signed_commitment: SignedCommitment,
 	validator_proofs: Vec<ValidatorMerkleProof>,
-	validator_set: BeefyNextAuthoritySet,
+	validator_set: BeefyNextAuthoritySet<Hash>,
 }
 
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct LightClient {
 	pub latest_commitment: Option<Commitment>,
-	pub validator_set: BeefyNextAuthoritySet,
+	pub validator_set: BeefyNextAuthoritySet<Hash>,
 	pub in_process_state: Option<InProcessState>,
 }
 

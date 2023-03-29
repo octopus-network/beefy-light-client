@@ -7,7 +7,7 @@ use hash_db::Hasher;
 use crate::{keccak256::Keccak256, BeefyNextAuthoritySet, Hash};
 use codec::{Decode, Encode};
 
-#[derive(Clone, Debug, Default, Encode, Decode)]
+#[derive(Clone, Debug, Default, Encode, Decode, PartialEq, Eq)]
 pub struct MmrLeafVersion(pub u8);
 impl MmrLeafVersion {
 	/// Create new version object from `major` and `minor` components.
@@ -29,20 +29,24 @@ impl MmrLeafVersion {
 	}
 }
 
-#[derive(Clone, Debug, Default, Encode, Decode)]
-pub struct MmrLeaf {
+pub type MmrLeaf = MmrLeafGeneic<u32, Hash, Hash, Vec<u8>>;
+
+// ref: https://github.com/paritytech/substrate/blob/49ba186c53c24a3ace99c55ecd75370d8e65da1f/primitives/consensus/beefy/src/mmr.rs#L52
+/// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct MmrLeafGeneic<BlockNumber, Hash, MerkleRoot, ExtraData> {
 	/// Version of the leaf format.
 	///
 	/// Can be used to enable future format migrations and compatibility.
 	/// See [`MmrLeafVersion`] documentation for details.
 	pub version: MmrLeafVersion,
 	/// Current block parent number and hash.
-	pub parent_number_and_hash: (u32, Hash),
+	pub parent_number_and_hash: (BlockNumber, Hash),
 	/// A merkle root of the next BEEFY authority set.
-	pub beefy_next_authority_set: BeefyNextAuthoritySet,
+	pub beefy_next_authority_set: BeefyNextAuthoritySet<MerkleRoot>,
 	/// Arbitrary extra leaf data to be used by downstream pallets to include custom data in the
 	/// [`MmrLeaf`]
-	pub leaf_extra: Vec<u8>,
+	pub leaf_extra: ExtraData,
 }
 
 // https://github.com/paritytech/substrate/blob/dec0369a35893c2be432e74358c4c7039e1e57be/primitives/merkle-mountain-range/src/lib.rs#L355
