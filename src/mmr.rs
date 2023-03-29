@@ -29,6 +29,10 @@ impl MmrLeafVersion {
 	}
 }
 
+// ref: https://github.com/paritytech/substrate/blob/d7b9969c96f621b9cd93f91ebc8220aa620ac0e8/primitives/merkle-mountain-range/src/lib.rs#L146
+#[derive(codec::Encode, codec::Decode, PartialEq, Eq)]
+pub struct EncodableOpaqueLeaf(pub Vec<u8>);
+
 pub type MmrLeaf = MmrLeafGeneic<u32, Hash, Hash, Vec<u8>>;
 
 // ref: https://github.com/paritytech/substrate/blob/49ba186c53c24a3ace99c55ecd75370d8e65da1f/primitives/consensus/beefy/src/mmr.rs#L52
@@ -141,17 +145,39 @@ mod tests {
 
 	#[test]
 	fn test_decode_mmr_leaf_and_mmr_leaf_proof() {
-		// block number is 1280, best block number is 1281
-		// 		{
-		//   blockHash: 0x22b2d813abf9ed4c60936b8a37ff605156ecb2c8b90e361d59dd772b88202ec5
-		//   leaves: 0x04c50100ff04000075728f50649a47e581d32e4999ec5300fb686335bb7551bb31896a1c2d32bd0c800000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000
-		//   proof: 0x04ff0400000000000001050000000000002822fb7de1e60f95a7547c93d810b9b809edb7c8300557c92ff76751090ed1390c0270f0920729a38f595148820d6434ee486e744db906d99ce8b51697f3b4c57cb50b54d3bae7267c680a731f14fd46174c2869262ba89f9fb3eb147ddf0e91b0372b66f27040106b14d62307a379a9a830badf9a11cb63c823728e6be25243cd41a7a240d003f60195e7733a6030770ebe63a418d6b26f571200bb0ab73d9dc15406276ac0832c6685323b59d542e3164e4a97ae78a028d4577294144609fa49bcdd057ee3f18a76f1df6c258350a1538516bb00e21fc6c9b36c120c371e7776f6919a04f759ac4093037dad5353f6991937da1131b8172eb8594a231367eba3486edae9c03401d5d4e5f822c6caeef8254a01369288bb1e5efb7257234221cc091b03a1c8074e3793da6d0e9f0c67932d0ed7962367064eb5f215dabdd495a7
+		// mmr root: 0x872ef8da39f2e6435164e8c366d1aaac59f61ccbf0127a377d732951a4846d32
+		// 690, best 691
+		// 	{
+		//   blockHash: 0xfbf43d561a3d4ebbceafb8e936b99e1d94b4892904b0b7db7cf4f54c8c4b6a88
+		//   leaves: 0x04c50100b102000094f7832b5f6159d61760c44a1bbdc19effedfa1c3e2efca53b2a00c02efec2aa450000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000
+		//   proof: 0x04b102000000000000b3020000000000001800904dd683c2bf9b7d725c68b8a98de795db9df89c405fec2eccfea9f9762458f074eab9ecf2ac8c168e088b36b7eec0bbe72ba201a09f2f4f836fafc378435fa02bba42abb637dddef7e7ae10849cdafe61b8fbede0d90768481feeec0fda5cc29de7e36b51b90407b0e04726d2a1c0ba7a9049aa4f24d93f0875bca4252a9e9804e434f2d46654869ec591a68f203d81b7a924596a57d740f510899955bf46f4bf4a1bfea4c1ed264051d7078b34438c29c898d990c200a84113080b57e908
 		// }
-		// let  encoded_mmr_leaf = hex!("04c50100ff04000075728f50649a47e581d32e4999ec5300fb686335bb7551bb31896a1c2d32bd0c800000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
+		let mmr_root = hex!("872ef8da39f2e6435164e8c366d1aaac59f61ccbf0127a377d732951a4846d32");
+		let  encoded_mmr_leaf = hex!("04c50100b102000094f7832b5f6159d61760c44a1bbdc19effedfa1c3e2efca53b2a00c02efec2aa450000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
+		let encode_leaves: Vec<EncodableOpaqueLeaf> =
+			Decode::decode(&mut &encoded_mmr_leaf[..]).unwrap();
 
-		// let leaf: Vec<MmrLeaf> = Decode::decode(&mut &encoded_mmr_leaf[..]).unwrap();
-		// let mmr_leaf_vector: MmrLeaf = Decode::decode(&mut &*leaf).unwrap();
-		// println!("mmr_leaf_vector: {leaf:?}");
+		let leaves = encode_leaves
+			.into_iter()
+			.map(|item| MmrLeaf::decode(&mut &item.0[..]).unwrap())
+			.collect::<Vec<_>>();
+
+		println!("leaves: {leaves:?}");
+
+		let encode_leaves_proof = hex!("04b102000000000000b3020000000000001800904dd683c2bf9b7d725c68b8a98de795db9df89c405fec2eccfea9f9762458f074eab9ecf2ac8c168e088b36b7eec0bbe72ba201a09f2f4f836fafc378435fa02bba42abb637dddef7e7ae10849cdafe61b8fbede0d90768481feeec0fda5cc29de7e36b51b90407b0e04726d2a1c0ba7a9049aa4f24d93f0875bca4252a9e9804e434f2d46654869ec591a68f203d81b7a924596a57d740f510899955bf46f4bf4a1bfea4c1ed264051d7078b34438c29c898d990c200a84113080b57e908");
+		let mmr_proof = MmrLeafProof::decode(&mut &encode_leaves_proof[..]).unwrap();
+		println!("mmr_proof: {mmr_proof:?}");
+
+		let  encoded_mmr_leaf = hex!("04c50100b102000094f7832b5f6159d61760c44a1bbdc19effedfa1c3e2efca53b2a00c02efec2aa450000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
+		let encode_leaves: Vec<EncodableOpaqueLeaf> =
+			Decode::decode(&mut &encoded_mmr_leaf[..]).unwrap();
+		let hash_leaves = encode_leaves
+			.into_iter()
+			.map(|leaf| Keccak256::hash(&leaf.0))
+			.collect::<Vec<Hash>>();
+		let ret = verify_leaf_proof(mmr_root, hash_leaves, mmr_proof).unwrap();
+		assert!(ret);
+		println!("verify leaf proof successful!");
 	}
 	#[test]
 	fn verify_leaf_proof_works_1() {
