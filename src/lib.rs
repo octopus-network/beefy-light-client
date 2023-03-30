@@ -511,105 +511,28 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore = "test failed test data need to udpate"]
 	fn verify_validator_proofs_works() {
-		let proofs = vec![
-			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
-				proof: vec![
-					hex!("2434439b3f6496cdfc9295f52379b6dd06c6d3f72bb3fd7f367acf4cde15a5c4"),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1"),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
-				],
-				number_of_leaves: 5,
-				leaf_index: 0,
-				leaf: libsecp256k1::PublicKey::parse_slice(
-					&hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1"),
-					None,
-				)
-				.unwrap()
-				.serialize_compressed(),
-			},
-			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
-				proof: vec![
-					hex!("ea5e28e6e07cc0d6ea6978c5c161f0da9f05ad6d5c259bd98a38d5ed63c6d66d"),
-					hex!("b3a227b15b5de9a1993764d0f15f3f7022dc125b513dcaea84f162dbc8e0cdf1"),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
-				],
-				number_of_leaves: 5,
-				leaf_index: 1,
-				leaf: libsecp256k1::PublicKey::parse_slice(
-					&hex!("0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27"),
-					None,
-				)
-				.unwrap()
-				.serialize_compressed(),
-			},
-			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
-				proof: vec![
-					hex!("54e7776947cbea688edb0eafffef41c9bf1d91bf02b51b0debb8e9234679200a"),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7"),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
-				],
-				number_of_leaves: 5,
-				leaf_index: 2,
-				leaf: libsecp256k1::PublicKey::parse_slice(
-					&hex!("0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb"),
-					None,
-				)
-				.unwrap()
-				.serialize_compressed(),
-			},
-			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
-				proof: vec![
-					hex!("69ccb87a5d16f07350e6181de08bf71dc70c3289ebe67751b7eda1f0b2da965c"),
-					hex!("b15eb71c4432af5175d67d9b32a37c44d7cae4625f4a188ec00fe1dc422c21b7"),
-					hex!("3839dfbc4125baf6f733c367f7b3ad28627563275b77869297bbfde6374221a9"),
-				],
-				number_of_leaves: 5,
-				leaf_index: 3,
-				leaf: libsecp256k1::PublicKey::parse_slice(
-					&hex!("03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c"),
-					None,
-				)
-				.unwrap()
-				.serialize_compressed(),
-			},
-			MerkleProof {
-				root: [
-					190, 171, 181, 52, 208, 35, 61, 63, 243, 167, 41, 72, 146, 79, 19, 208, 223,
-					177, 46, 195, 87, 235, 1, 167, 227, 185, 178, 150, 73, 165, 92, 75,
-				],
-				proof: vec![hex!(
-					"a33c1baaa379963ee43c3a7983a3157080c32a462a9774f1fe6d2f0480428e5c"
-				)],
-				number_of_leaves: 5,
-				leaf_index: 4,
-				leaf: libsecp256k1::PublicKey::parse_slice(
-					&hex!("031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa"),
-					None,
-				)
-				.unwrap()
-				.serialize_compressed(),
-			},
+		let public_keys = vec![
+			"020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1", // Alice
+			"0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27", // Bob
+			"0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb", // Charlie
+			"03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c", // Dave
+			"031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa", // Eve
 		];
 
-		for proof in proofs {
+		let leaves = public_keys
+			.into_iter()
+			.map(|leaf| beefy_ecdsa_to_ethereum(&hex::decode(leaf).unwrap()))
+			.collect::<Vec<_>>();
+
+		let validator_merkle_proof = (0..5usize).fold(vec![], |mut result, idx| {
+			let merkle_proof: binary_merkle_tree::MerkleProof<Hash, Vec<u8>> =
+				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);
+			result.push(merkle_proof);
+			result
+		});
+
+		for proof in validator_merkle_proof {
 			assert!(verify_proof::<Keccak256, _, _>(
 				&proof.root,
 				proof.proof,

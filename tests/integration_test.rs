@@ -12,29 +12,35 @@ use binary_merkle_tree::{merkle_proof, merkle_root};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use secp256k1_test::{rand::thread_rng, Message as SecpMessage, Secp256k1};
+
 #[test]
-#[ignore = "test failed"]
 fn update_state_works() {
 	// $ subkey inspect --scheme ecdsa //Alice
 	// Secret Key URI `//Alice` is account:
 	//   Public key (hex):  0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1
 	let public_keys = vec![
-		"0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1", // Alice
-		"0x0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27", // Bob
-		"0x0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb", // Charlie
-		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c", // Dave
+		"0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1".to_string(), // Alice
+		"0x0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27".to_string(), // Bob
+		"0x0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb".to_string(), // Charlie
+		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
 	];
 
-	let mut lc = new(public_keys.clone().into_iter().map(Into::into).collect());
+	let mut lc = new(public_keys);
 	println!("light client: {:?}", lc);
 
-	let leaves = public_keys
+	let public_keys_without_no_prefix = vec![
+		"020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1", // Alice
+		"0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27", // Bob
+		"0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb", // Charlie
+		"03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c", // Dave
+	];
+	let leaves = public_keys_without_no_prefix
 		.clone()
 		.into_iter()
 		.map(|leaf| beefy_ecdsa_to_ethereum(&hex::decode(leaf).unwrap()))
 		.collect::<Vec<_>>();
 
-	let validator_proofs_1 = (0..public_keys.len())
+	let validator_proofs_1 = (0..public_keys_without_no_prefix.len())
 		.fold(vec![], |mut result, idx| {
 			let merkle_proof: binary_merkle_tree::MerkleProof<beefy_light_client::Hash, Vec<u8>> =
 				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);
@@ -44,36 +50,42 @@ fn update_state_works() {
 		.into_iter()
 		.map(Into::into)
 		.collect::<Vec<ValidatorMerkleProof>>();
+	println!("validator proofs 1 :{validator_proofs_1:?}");
 
-	// 2023-03-30 16:59:58.228  INFO tokio-runtime-worker beefy: 🥩 Round #29 concluded, finality_proof:
-	// V1(SignedCommitment { commitment: Commitment {
-	// payload: Payload([([109, 104], [153, 241, 169, 211, 144, 135, 202, 236, 122, 173, 236, 72, 241, 110, 22, 172, 222, 151, 208, 222, 191, 14, 125, 221, 184, 167, 46, 100, 253, 11, 135, 221])]), block_number: 29, validator_set_id: 2 },
-	// signatures: [Some(Signature(6379a51fad3831a60e661a90e3876ee625f6bb266231fcc6c77dfdf6cdcda16a1db027b937bf8f416c355986be9ff216182ad2034ffcfc280e63e29343b3404000)),
-	// Some(Signature(0a1d4d4bf7603afaee8d98a0b77256c1e91691b2b614a1a72c41dc23e14d16cd203f77c4add4ce78ec4babd767e9afbf2993c67299929f5b2984012a9ef06e5000)),
+	// 2023-03-30 20:03:10.771  INFO tokio-runtime-worker beefy: 🥩 Round #1016 concluded, finality_proof:
+	// V1(SignedCommitment { commitment: Commitment { payload:
+	// Payload([([109, 104], [72, 177, 125, 1, 6, 229, 44, 66, 19, 254, 233, 143, 127, 202, 171, 0, 241, 13, 199, 206, 122, 223, 143, 20, 54, 197, 39, 209, 152, 57, 25, 121])]),
+	//  block_number: 1016, validator_set_id: 110 },
+	// signatures: [Some(Signature(2f87563b1f1640cba7578fe7b98968228292b01ede77d205a463df39651c33cc609af00064aac955c216eba53152e2963b6a8ca19981ce9443a069fb6f4c9f8801)),
+	// Some(Signature(7141d4f8ac70ad04faa9f11ce6d8bdcad04d4c2cba1b0f6f911b96ee47b79b71682602ea3902fedb525fc793bf5901e3975f4cd443e01a780bd337835d7a91ac00)),
 	// None,
-	// Some(Signature(af49836738db5b2ec0790db6c0d39bef62d3637372739dd49e3217350efcbad908cc6a7f5126c803d617607fa8178110e7645a9adcc4fcb2d069ec72fb8bbadd00))] }).
+	// Some(Signature(453c5c89fddca50397d241a24e53f0a4cc5307213bcde83f74368ea115dac751670f7848650053ea631b93f47f95d15307e5f030a6f9d6250cba7a77ff2abcd300))] }).
 
-	let encoded_versioned_finality_proof_1 = hex!("01046d6880c217f03ad31ec31ce87868e09e5e495709f71afac633e76e8ef9b501324395d319000000000000000000000004b805000000105601084305efd41d12b85fb246c4d6a40ff23bd9d32cc795cef0c92193c334ec5d7316fdfd1bbec62afc65819f4afeb427bed5002109fefbce5176a2a87448fc0049fd387d312a512849fe068186f314f353a636c2ae7c4fdec3f077eac97439f25bbd21a6514b1f153f8e03e0aad662589c7ba8c24b05ec9e9b7a6d0f24d6a1610143b433d4bd8c9755766fe38a767a996d51ab78bd31ce37d4d494787383ce3797096018a4c28cd352281cfbc801893c5a0415b9bc430082afb772b3dab8de4ab50026908266e17631abaa9c9418432e129c2ff4fc4ef5f9ffa75b2b56d4f963a86528f2e99d9ad8ae2aacf30fd295b019600b3a055bf7ca1bbbea26823f421d25d601");
+	let encoded_versioned_finality_proof_1 =
+		VersionedFinalityProof::V1(beefy_light_client::commitment::SignedCommitment {
+			commitment: beefy_light_client::commitment::Commitment {
+				payload: beefy_light_client::commitment::Payload::new(
+					[109, 104],
+					vec![72, 177, 125, 1, 6, 229, 44, 66, 19, 254, 233, 143, 127, 202, 171, 0, 241, 13, 199, 206, 122, 223, 143, 20, 54, 197, 39, 209, 152, 57, 25, 121],
+				),
+				block_number: 1016,
+				validator_set_id: 110,
+			},
+			signatures: vec![Some(beefy_light_client::commitment::Signature::from("0x2f87563b1f1640cba7578fe7b98968228292b01ede77d205a463df39651c33cc609af00064aac955c216eba53152e2963b6a8ca19981ce9443a069fb6f4c9f8801")), Some(beefy_light_client::commitment::Signature::from("0x7141d4f8ac70ad04faa9f11ce6d8bdcad04d4c2cba1b0f6f911b96ee47b79b71682602ea3902fedb525fc793bf5901e3975f4cd443e01a780bd337835d7a91ac00")), None, Some(beefy_light_client::commitment::Signature::from("0x453c5c89fddca50397d241a24e53f0a4cc5307213bcde83f74368ea115dac751670f7848650053ea631b93f47f95d15307e5f030a6f9d6250cba7a77ff2abcd300"))],
+		}).encode();
 	let versioned_finality_proof_1 =
 		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_1[..]);
 	println!("versioned_finality_proof_1: {:?}", versioned_finality_proof_1);
 
-	// get block hash of #25
-	// {"id":216,"jsonrpc":"2.0","method":"chain_getBlockHash","params":[25]}
-	// {"jsonrpc":"2.0","result":"0xfed50296570e59a9ed78ef50fd1f7a8cefa8f549c8487de41205ad6f0f10fe4e","id":216}
-	//
-	// get leaf proof of index #24 at block #25
-	// {"id":221,"jsonrpc":"2.0","method":"mmr_generateProof","params":[24,"0xfed50296570e59a9ed78ef50fd1f7a8cefa8f549c8487de41205ad6f0f10fe4e"]}
-	// {"jsonrpc":"2.0","result":{"blockHash":"0xfed50296570e59a9ed78ef50fd1f7a8cefa8f549c8487de41205ad6f0f10fe4e","leaf":"0x49010018000000ca49d4211a41a1a807e5f3e101b638961bd13d29c29424bc70392a79ddd28883010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a200","proof":"0x1800000000000000190000000000000008aa39aef631e5db27573922ee5e00d6588acc586eb774954a0c0352e6221bd318a821d6b67d64cd6bef167ecf547fbca255d08202f287cd1abd63fa21e116abfc"},"id":221}
-	let  encoded_mmr_leaf_1 = hex!("49010018000000ca49d4211a41a1a807e5f3e101b638961bd13d29c29424bc70392a79ddd28883010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a200");
+	// block is 1015, best block is 1016, call generateProof(1015, 1016)
+	// 	{
+	//   blockHash: 0x71d7c20f1bd1ccb19f3512584581d7e0604a1fac8044eeae57b0f53c338a8a97
+	//   leaves: 0x04c50100f60300006db686a490583a5ca8b2e9a7109309ab655ac8acc9313c480816dc8b1ab20b636e00000000000000040000002145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe290565190000000000000000000000000000000000000000000000000000000000000000
+	//   proof: 0x04f603000000000000f80300000000000024d6e36dcd294eb0a1cc41681d4099c8d5a86c7e831ff5ab949cc61e3364f23f9ca1950d9c0d8e171e44b657dd01e3eaa3c358cc0b7a0cb3802cad18b70a1fa6798f3559a5c8ff233017d54f92264ca056a2497612437835564e2a1fb869dc2136c58b587b0faec8b1d41b2e4d73116ec9e0612987dd1ab046ffb6fddf5da0f0200df6651f33f8c16bd376271caea0c33548bf131b72c72f645cf47e51b191a7c0eaf6072784796e4c9efb924348a148d67b6677f8a53d2113c925f8493d1ba61c38997b0e8b6f2c7c409a1a8210ce316483764d01d0f9e29ff890f5fe64042ed19ecec5637411a8294a0595d01c145cb732ca7e81149cde479d856c299a2b4b0db8401eac26ededa9cc58d85ac6a1bc8ad0da32d891544b6e778fc97332111c35
+	// }
+	let  encoded_mmr_leaf_1 = hex!("04c50100f60300006db686a490583a5ca8b2e9a7109309ab655ac8acc9313c480816dc8b1ab20b636e00000000000000040000002145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe290565190000000000000000000000000000000000000000000000000000000000000000");
+	let encoded_mmr_proof_1 =  hex!("04f603000000000000f80300000000000024d6e36dcd294eb0a1cc41681d4099c8d5a86c7e831ff5ab949cc61e3364f23f9ca1950d9c0d8e171e44b657dd01e3eaa3c358cc0b7a0cb3802cad18b70a1fa6798f3559a5c8ff233017d54f92264ca056a2497612437835564e2a1fb869dc2136c58b587b0faec8b1d41b2e4d73116ec9e0612987dd1ab046ffb6fddf5da0f0200df6651f33f8c16bd376271caea0c33548bf131b72c72f645cf47e51b191a7c0eaf6072784796e4c9efb924348a148d67b6677f8a53d2113c925f8493d1ba61c38997b0e8b6f2c7c409a1a8210ce316483764d01d0f9e29ff890f5fe64042ed19ecec5637411a8294a0595d01c145cb732ca7e81149cde479d856c299a2b4b0db8401eac26ededa9cc58d85ac6a1bc8ad0da32d891544b6e778fc97332111c35");
 
-	let leaf: Vec<u8> = Decode::decode(&mut &encoded_mmr_leaf_1[..]).unwrap();
-	let mmr_leaf_1: MmrLeaf = Decode::decode(&mut &*leaf).unwrap();
-	println!("mmr_leaf_1: {:?}", mmr_leaf_1);
-
-	let encoded_mmr_proof_1 =  hex!("1800000000000000190000000000000008aa39aef631e5db27573922ee5e00d6588acc586eb774954a0c0352e6221bd318a821d6b67d64cd6bef167ecf547fbca255d08202f287cd1abd63fa21e116abfc");
-	let mmr_proof_1 = MmrLeavesProof::decode(&mut &encoded_mmr_proof_1[..]);
-	println!("mmr_proof_1: {:?}", mmr_proof_1);
 	assert!(lc
 		.update_state(
 			&encoded_versioned_finality_proof_1,
@@ -84,13 +96,31 @@ fn update_state_works() {
 		.is_ok());
 	println!("light client: {:?}", lc);
 
-	// 2022-10-03 15:41:38 🥩 Round #33 concluded, finality_proof: V1(SignedCommitment { commitment: Commitment { payload: Payload([([109, 104], [89, 203, 81, 61, 201, 8, 173, 192, 75, 218, 141, 102, 24, 16, 0, 229, 194, 127, 78, 95, 3, 239, 246, 7, 204, 181, 168, 117, 120, 96, 128, 5])]), block_number: 33, validator_set_id: 0 }, signatures: [None, Some(Signature(c56be180c4efef50b220ddd47365db65031f01f72f88bd77864f281f9e290ecf0d99580fcd197d2137d06c6601fefff77f4532c11a3e7f6cfe334e902167b6fb00)), Some(Signature(d41d48f2af7bda217ee844c46d65dfc7075828051e1fb0dd873d2bdede25f22e30b1e5878282c2e500a646cff82eb93436db716b3025a4ace437d2bf79b00ac400)), Some(Signature(30153374e6d4cca8430d1c10ebdc58a0b66180b5a7ed1daca55de0bff09e7785534b6681a2410a82afa8ab02cad36928d2dd2f1162d542177f527204a8ce591c00)), Some(Signature(e6754323c95da8c584b4bb8216adec0f351fda339a50ae29031c623ed2db124875c7d75891de6450ff60ff8872c90fd9a5ba7cac4ebcc43a80f5ffe8062ba7e500))] }).
-	let encoded_versioned_finality_proof_2 = hex!("01046d688059cb513dc908adc04bda8d66181000e5c27f4e5f03eff607ccb5a8757860800521000000000000000000000004b805000000109798d407632bb5c9078d8c442c5885ce20fb13b519092038335df7c3d913e3a7509836506f9aac28013bd45e197fd1adbb1843fb62957719ca499e7a499eac2900d41d48f2af7bda217ee844c46d65dfc7075828051e1fb0dd873d2bdede25f22e30b1e5878282c2e500a646cff82eb93436db716b3025a4ace437d2bf79b00ac40030153374e6d4cca8430d1c10ebdc58a0b66180b5a7ed1daca55de0bff09e7785534b6681a2410a82afa8ab02cad36928d2dd2f1162d542177f527204a8ce591c00e6754323c95da8c584b4bb8216adec0f351fda339a50ae29031c623ed2db124875c7d75891de6450ff60ff8872c90fd9a5ba7cac4ebcc43a80f5ffe8062ba7e500");
+	// 2023-03-30 20:17:10.002  INFO tokio-runtime-worker beefy: 🥩 Round #1156 concluded, finality_proof:
+	// V1(SignedCommitment { commitment: Commitment { payload:
+	//Payload([([109, 104], [141, 68, 244, 77, 106, 168, 211, 149, 212, 174, 216, 177, 171, 183, 220, 243, 140, 165, 133, 203, 247, 116, 168, 171, 59, 216, 123, 18, 71, 133, 113, 119])]),
+	//  block_number: 1156, validator_set_id: 124 },
+	// signatures: [Some(Signature(5286d66a84a38ef35a02a04c99a3c369138059c0f5716a29d6fb138a8190b0ad17be68ec9363c1ead330788353ba47d513a74ae1bd8c2a79f731203382fa958000)),
+	// Some(Signature(96039b48ab8e8c8bea2816c9d4f976eaf2fae3c5711d7dc06658ff7e63673e935da7770960f691add8cb4c81b8ec50a7bb477c641a0c5ea21d4fd1e5b9c0249a01)),
+	//  None,
+	// Some(Signature(6bfd1902a063a2ff60b94daaec8cb9a623a8038d609f380120bef6a35109d43f5a1e7f2b11a57cf91c7cf1ef795c9aee595a54a92f472ea016ab5a75e0e7c91201))] }).
+	let encoded_versioned_finality_proof_2 =
+		VersionedFinalityProof::V1(beefy_light_client::commitment::SignedCommitment {
+			commitment: beefy_light_client::commitment::Commitment {
+				payload: beefy_light_client::commitment::Payload::new(
+					[109, 104],
+					vec![141, 68, 244, 77, 106, 168, 211, 149, 212, 174, 216, 177, 171, 183, 220, 243, 140, 165, 133, 203, 247, 116, 168, 171, 59, 216, 123, 18, 71, 133, 113, 119],
+				),
+				block_number: 1156,
+				validator_set_id: 124,
+			},
+			signatures: vec![Some(beefy_light_client::commitment::Signature(hex!("5286d66a84a38ef35a02a04c99a3c369138059c0f5716a29d6fb138a8190b0ad17be68ec9363c1ead330788353ba47d513a74ae1bd8c2a79f731203382fa958000"))), Some(beefy_light_client::commitment::Signature(hex!("96039b48ab8e8c8bea2816c9d4f976eaf2fae3c5711d7dc06658ff7e63673e935da7770960f691add8cb4c81b8ec50a7bb477c641a0c5ea21d4fd1e5b9c0249a01"))), None, Some(beefy_light_client::commitment::Signature(hex!("6bfd1902a063a2ff60b94daaec8cb9a623a8038d609f380120bef6a35109d43f5a1e7f2b11a57cf91c7cf1ef795c9aee595a54a92f472ea016ab5a75e0e7c91201")))],
+		}).encode();
 	let versioned_finality_proof_2 =
 		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_2[..]);
 	println!("versioned_finality_proof_2: {:?}", versioned_finality_proof_2);
 
-	let validator_proofs_2 = (0..public_keys.len())
+	let validator_proofs_2 = (0..public_keys_without_no_prefix.len())
 		.fold(vec![], |mut result, idx| {
 			let merkle_proof: binary_merkle_tree::MerkleProof<beefy_light_client::Hash, Vec<u8>> =
 				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);
@@ -101,22 +131,16 @@ fn update_state_works() {
 		.map(Into::into)
 		.collect::<Vec<ValidatorMerkleProof>>();
 
-	// get block hash of #33
-	// {"id":195,"jsonrpc":"2.0","method":"chain_getBlockHash","params":[33]}
-	// {"jsonrpc":"2.0","result":"0xe436dae54995bc67662065bc3ed1dabd3657bd5e85080210e996f50755d625e1","id":195}
-	//
-	// get leaf proof of index #32 at block #33
-	// {"id":236,"jsonrpc":"2.0","method":"mmr_generateProof","params":[32,"0xe436dae54995bc67662065bc3ed1dabd3657bd5e85080210e996f50755d625e1"]}
-	// {"jsonrpc":"2.0","result":{"blockHash":"0xe436dae54995bc67662065bc3ed1dabd3657bd5e85080210e996f50755d625e1","leaf":"0x49010020000000f3f279b0f519eb692283622b1cc3d47dc437cff9e8d458f6f6583aa96649baca010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a200","proof":"0x20000000000000002100000000000000040a86dca09827c83d57156e813b37b3d781bafcaceba5edca1946975215641eb2"},"id":236}
-	let encoded_mmr_leaf_2 = hex!("49010020000000f3f279b0f519eb692283622b1cc3d47dc437cff9e8d458f6f6583aa96649baca010000000000000005000000304803fa5a91d9852caafe04b4b867a4ed27a07a5bee3d1507b4b187a68777a200");
+	// block is 1155, best block number is 1156
+	// 	{
+	//   blockHash: 0xd5808d14ebb2b8aac06736e5b6cf90fb106d059d70fac4d26d065296f1477378
+	//   leaves: 0x04c50100820400006f58e3eb5381b62592f7a9eb7da0e8f6df5ddc15246f6def5cef98e55d22c2847c00000000000000040000002145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe290565190000000000000000000000000000000000000000000000000000000000000000
+	//   proof: 0x0482040000000000008404000000000000107e50e4383dd2ef16d3730491491770f33e7b8d793ef88abc66e9e4cc40beb2077e8ca22c68725cb943083cb25d14f7b34509ab863273bf6fdaf05819945a763fedf46846017aef721f1c4da7d33766bbd65a8962dee10beb8483097540c487eae51059bec526cb2ede811bd9f7e9d248aaf6952691a6dccb07b312eb5931eeaa
+	// }
+	let encoded_mmr_leaf_2 = hex!("04c50100820400006f58e3eb5381b62592f7a9eb7da0e8f6df5ddc15246f6def5cef98e55d22c2847c00000000000000040000002145814fb41496b2881ca364a06e320fd1bf2fa7b94e1e37325cefbe290565190000000000000000000000000000000000000000000000000000000000000000");
 
-	let leaf: Vec<u8> = Decode::decode(&mut &encoded_mmr_leaf_2[..]).unwrap();
-	let mmr_leaf_2: MmrLeaf = Decode::decode(&mut &*leaf).unwrap();
-	println!("mmr_leaf_2: {:?}", mmr_leaf_2);
+	let encoded_mmr_proof_2 = hex!("0482040000000000008404000000000000107e50e4383dd2ef16d3730491491770f33e7b8d793ef88abc66e9e4cc40beb2077e8ca22c68725cb943083cb25d14f7b34509ab863273bf6fdaf05819945a763fedf46846017aef721f1c4da7d33766bbd65a8962dee10beb8483097540c487eae51059bec526cb2ede811bd9f7e9d248aaf6952691a6dccb07b312eb5931eeaa");
 
-	let encoded_mmr_proof_2 = hex!("20000000000000002100000000000000040a86dca09827c83d57156e813b37b3d781bafcaceba5edca1946975215641eb2");
-	let mmr_proof_2 = MmrLeavesProof::decode(&mut &encoded_mmr_proof_2[..]);
-	println!("mmr_proof_2: {:?}", mmr_proof_2);
 	assert!(lc
 		.update_state(
 			&encoded_versioned_finality_proof_2,
@@ -136,7 +160,6 @@ fn verify_solochain_messages_works() {
 		"0x0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27".to_string(), // Bob
 		"0x0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb".to_string(), // Charlie
 		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
-		"0x031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa".to_string(), // Eve
 	];
 
 	let mut lc = new(public_keys);
