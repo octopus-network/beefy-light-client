@@ -108,8 +108,11 @@ pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
 	.unwrap_or_default()
 }
 
+/// ref: https://github.com/paritytech/substrate/blob/9c92e4987160a17daa72f79186d981b6fbe5879e/utils/binary-merkle-tree/src/lib.rs#L92
 #[derive(Debug, Default, Clone, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
 pub struct ValidatorMerkleProof {
+	/// Root hash of generated merkle tree.
+	pub root: Hash,
 	/// Proof items (does not contain the leaf hash, nor the root obviously).
 	///
 	/// This vec contains all inner node hashes necessary to reconstruct the root hash given the
@@ -124,6 +127,18 @@ pub struct ValidatorMerkleProof {
 	pub leaf_index: usize,
 	/// Leaf content.
 	pub leaf: Vec<u8>,
+}
+
+impl From<binary_merkle_tree::MerkleProof<Hash, Vec<u8>>> for ValidatorMerkleProof {
+	fn from(value: binary_merkle_tree::MerkleProof<Hash, Vec<u8>>) -> Self {
+		Self {
+			root: value.root,
+			proof: value.proof,
+			number_of_leaves: value.number_of_leaves,
+			leaf_index: value.leaf_index,
+			leaf: value.leaf,
+		}
+	}
 }
 
 #[derive(Debug, BorshDeserialize, BorshSerialize)]
@@ -855,5 +870,40 @@ mod tests {
 				.to_vec(),
 			}
 		);
+	}
+
+	#[test]
+	fn test_generate_validator_merkle_proof() {
+		let public_keys = vec![
+			"020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1", // Alice
+			"0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27", // Bob
+			"0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb", // Charlie
+			"03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c", // Dave
+			"031d10105e323c4afce225208f71a6441ee327a65b9e646e772500c74d31f669aa", // Eve
+		];
+
+		let leaves = public_keys
+			.into_iter()
+			.map(|leaf| beefy_ecdsa_to_ethereum(&hex::decode(leaf).unwrap()))
+			.collect::<Vec<_>>();
+
+		let validator_merkle_proof = (0..5usize).fold(vec![], |mut result, idx| {
+			let merkle_proof: binary_merkle_tree::MerkleProof<Hash, Vec<u8>> =
+				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);
+			result.push(merkle_proof);
+			result
+		});
+		println!("validator merkle proof : {validator_merkle_proof:?}");
+	}
+
+	#[test]
+	fn test_hex_and_hex_literal() {
+		let left =
+			hex_literal::hex!("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1")
+				.to_vec();
+		let right =
+			hex::decode("020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1")
+				.unwrap();
+		assert_eq!(left, right);
 	}
 }
