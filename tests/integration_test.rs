@@ -25,7 +25,6 @@ fn update_state_works() {
 	];
 
 	let mut lc = LightClient::new(public_keys.clone());
-	println!("light client: {:?}", lc);
 
 	let leaves = public_keys
 		.clone()
@@ -43,7 +42,6 @@ fn update_state_works() {
 		.into_iter()
 		.map(Into::into)
 		.collect::<Vec<ValidatorMerkleProof>>();
-	println!("validator proofs 1 :{validator_proofs_1:?}");
 
 	// 2023-03-30 20:03:10.771  INFO tokio-runtime-worker beefy: 🥩 Round #1016 concluded, finality_proof:
 	// V1(SignedCommitment { commitment: Commitment { payload:
@@ -66,9 +64,6 @@ fn update_state_works() {
 			},
 			signatures: vec![Some(beefy_light_client::commitment::Signature::from("0x2f87563b1f1640cba7578fe7b98968228292b01ede77d205a463df39651c33cc609af00064aac955c216eba53152e2963b6a8ca19981ce9443a069fb6f4c9f8801")), Some(beefy_light_client::commitment::Signature::from("0x7141d4f8ac70ad04faa9f11ce6d8bdcad04d4c2cba1b0f6f911b96ee47b79b71682602ea3902fedb525fc793bf5901e3975f4cd443e01a780bd337835d7a91ac00")), None, Some(beefy_light_client::commitment::Signature::from("0x453c5c89fddca50397d241a24e53f0a4cc5307213bcde83f74368ea115dac751670f7848650053ea631b93f47f95d15307e5f030a6f9d6250cba7a77ff2abcd300"))],
 		}).encode();
-	let versioned_finality_proof_1 =
-		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_1[..]);
-	println!("versioned_finality_proof_1: {:?}", versioned_finality_proof_1);
 
 	// block is 1015, best block is 1016, call generateProof(1015, 1016)
 	// 	{
@@ -87,7 +82,6 @@ fn update_state_works() {
 			&encoded_mmr_proof_1,
 		)
 		.is_ok());
-	println!("light client: {:?}", lc);
 
 	// 2023-03-30 20:17:10.002  INFO tokio-runtime-worker beefy: 🥩 Round #1156 concluded, finality_proof:
 	// V1(SignedCommitment { commitment: Commitment { payload:
@@ -109,9 +103,6 @@ fn update_state_works() {
 			},
 			signatures: vec![Some(beefy_light_client::commitment::Signature(hex!("5286d66a84a38ef35a02a04c99a3c369138059c0f5716a29d6fb138a8190b0ad17be68ec9363c1ead330788353ba47d513a74ae1bd8c2a79f731203382fa958000"))), Some(beefy_light_client::commitment::Signature(hex!("96039b48ab8e8c8bea2816c9d4f976eaf2fae3c5711d7dc06658ff7e63673e935da7770960f691add8cb4c81b8ec50a7bb477c641a0c5ea21d4fd1e5b9c0249a01"))), None, Some(beefy_light_client::commitment::Signature(hex!("6bfd1902a063a2ff60b94daaec8cb9a623a8038d609f380120bef6a35109d43f5a1e7f2b11a57cf91c7cf1ef795c9aee595a54a92f472ea016ab5a75e0e7c91201")))],
 		}).encode();
-	let versioned_finality_proof_2 =
-		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_2[..]);
-	println!("versioned_finality_proof_2: {:?}", versioned_finality_proof_2);
 
 	let validator_proofs_2 = (0..public_keys.len())
 		.fold(vec![], |mut result, idx| {
@@ -142,7 +133,6 @@ fn update_state_works() {
 			&encoded_mmr_proof_2,
 		)
 		.is_ok());
-	println!("light client: {:?}", lc);
 }
 
 #[test]
