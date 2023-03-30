@@ -18,28 +18,22 @@ fn update_state_works() {
 	// Secret Key URI `//Alice` is account:
 	//   Public key (hex):  0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1
 	let public_keys = vec![
-		"0x020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1".to_string(), // Alice
-		"0x0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27".to_string(), // Bob
-		"0x0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb".to_string(), // Charlie
-		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
+		"020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1".to_string(), // Alice
+		"0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27".to_string(), // Bob
+		"0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb".to_string(), // Charlie
+		"03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
 	];
 
-	let mut lc = LightClient::new(public_keys);
+	let mut lc = LightClient::new(public_keys.clone());
 	println!("light client: {:?}", lc);
 
-	let public_keys_without_no_prefix = vec![
-		"020a1091341fe5664bfa1782d5e04779689068c916b04cb365ec3153755684d9a1", // Alice
-		"0390084fdbf27d2b79d26a4f13f0ccd982cb755a661969143c37cbc49ef5b91f27", // Bob
-		"0389411795514af1627765eceffcbd002719f031604fadd7d188e2dc585b4e1afb", // Charlie
-		"03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c", // Dave
-	];
-	let leaves = public_keys_without_no_prefix
+	let leaves = public_keys
 		.clone()
 		.into_iter()
 		.map(|leaf| beefy_ecdsa_to_ethereum(&hex::decode(leaf).unwrap()))
 		.collect::<Vec<_>>();
 
-	let validator_proofs_1 = (0..public_keys_without_no_prefix.len())
+	let validator_proofs_1 = (0..public_keys.len())
 		.fold(vec![], |mut result, idx| {
 			let merkle_proof: binary_merkle_tree::MerkleProof<beefy_light_client::Hash, Vec<u8>> =
 				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);
@@ -119,7 +113,7 @@ fn update_state_works() {
 		VersionedFinalityProof::decode(&mut &encoded_versioned_finality_proof_2[..]);
 	println!("versioned_finality_proof_2: {:?}", versioned_finality_proof_2);
 
-	let validator_proofs_2 = (0..public_keys_without_no_prefix.len())
+	let validator_proofs_2 = (0..public_keys.len())
 		.fold(vec![], |mut result, idx| {
 			let merkle_proof: binary_merkle_tree::MerkleProof<beefy_light_client::Hash, Vec<u8>> =
 				binary_merkle_tree::merkle_proof::<Keccak256, _, _>(leaves.clone(), idx);

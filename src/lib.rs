@@ -160,6 +160,10 @@ pub struct LightClient {
 impl LightClient {
 	// Initialize light client using the BeefyId of the initial validator set.
 	pub fn new(initial_public_keys: Vec<String>) -> LightClient {
+		let initial_public_keys = initial_public_keys
+			.into_iter()
+			.map(|key| if key.starts_with("0x") { key } else { format!("0x{key}") })
+			.collect::<Vec<_>>();
 		let initial_public_keys: Vec<Vec<u8>> = initial_public_keys
 			.into_iter()
 			.map(|hex_str| {
