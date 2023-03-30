@@ -3,7 +3,7 @@ use beefy_light_client::{
 	commitment::{Signature, SignedCommitment, VersionedFinalityProof},
 	header::{Digest, Header},
 	keccak256::Keccak256,
-	mmr::{MmrLeaf, MmrLeafProof},
+	mmr::{MmrLeaf, MmrLeavesProof},
 	new,
 	validator_set::BeefyNextAuthoritySet,
 	ValidatorMerkleProof,
@@ -114,7 +114,7 @@ fn update_state_works() {
 	println!("mmr_leaf_1: {:?}", mmr_leaf_1);
 
 	let encoded_mmr_proof_1 =  hex!("1800000000000000190000000000000008aa39aef631e5db27573922ee5e00d6588acc586eb774954a0c0352e6221bd318a821d6b67d64cd6bef167ecf547fbca255d08202f287cd1abd63fa21e116abfc");
-	let mmr_proof_1 = MmrLeafProof::decode(&mut &encoded_mmr_proof_1[..]);
+	let mmr_proof_1 = MmrLeavesProof::decode(&mut &encoded_mmr_proof_1[..]);
 	println!("mmr_proof_1: {:?}", mmr_proof_1);
 	assert!(lc
 		.update_state(
@@ -195,7 +195,7 @@ fn update_state_works() {
 	println!("mmr_leaf_2: {:?}", mmr_leaf_2);
 
 	let encoded_mmr_proof_2 = hex!("20000000000000002100000000000000040a86dca09827c83d57156e813b37b3d781bafcaceba5edca1946975215641eb2");
-	let mmr_proof_2 = MmrLeafProof::decode(&mut &encoded_mmr_proof_2[..]);
+	let mmr_proof_2 = MmrLeavesProof::decode(&mut &encoded_mmr_proof_2[..]);
 	println!("mmr_proof_2: {:?}", mmr_proof_2);
 	assert!(lc
 		.update_state(
@@ -278,7 +278,7 @@ fn verify_solochain_messages_works() {
 	println!("mmr_leaf: {:?}", mmr_leaf);
 
 	let encoded_mmr_proof =  hex!("1d000000000000002100000000000000189ab2308aee9171fab99e59bc86ade273bb249e8e287543ee077798de8416155427524b23d1c1f1d0d17fc1c523b6e03e7def2724ed17057a31ef235157d30f1d7f70e28c4e02e65ca5dae450bba580fbf5c991b95dfe6a6d58246e2895d72233a821d6b67d64cd6bef167ecf547fbca255d08202f287cd1abd63fa21e116abfcaa39aef631e5db27573922ee5e00d6588acc586eb774954a0c0352e6221bd3183b099e7b31e66b8b9bb220b79f21d56b27bd0b4d524ad5f4cc85bc9f1c49aa57");
-	let mmr_proof = MmrLeafProof::decode(&mut &encoded_mmr_proof[..]);
+	let mmr_proof = MmrLeavesProof::decode(&mut &encoded_mmr_proof[..]);
 	println!("mmr_proof: {:?}", mmr_proof);
 
 	assert!(lc

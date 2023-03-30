@@ -56,13 +56,20 @@ pub struct MmrLeafGeneic<BlockNumber, Hash, MerkleRoot, ExtraData> {
 // https://github.com/paritytech/substrate/blob/dec0369a35893c2be432e74358c4c7039e1e57be/primitives/merkle-mountain-range/src/lib.rs#L355
 /// A MMR proof data for one of the leaves.
 #[derive(Debug, Clone, Default, Encode, Decode)]
-pub struct MmrLeafProof {
+pub struct MmrLeavesProof {
 	/// The index of the leaf the proof is for.
 	pub leaf_indices: Vec<u64>,
 	/// Number of leaves in MMR, when the proof was generated.
 	pub leaf_count: u64,
 	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
 	pub items: Vec<Hash>,
+}
+
+impl TryFrom<Vec<u8>> for MmrLeavesProof {
+	type Error = crate::Error;
+	fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+		MmrLeavesProof::decode(&mut &value[..]).map_err(|_| crate::Error::CantDecodeMmrProof)
+	}
 }
 
 /// MMR nodes & size -related utilities.
@@ -119,7 +126,7 @@ impl mmr_lib::Merge for HashMerger {
 pub fn verify_leaf_proof(
 	root: Hash,
 	leaves: Vec<Hash>,
-	proof: MmrLeafProof,
+	proof: MmrLeavesProof,
 ) -> Result<bool, crate::Error> {
 	let size = NodesUtils::new(proof.leaf_count).size();
 	if leaves.len() != proof.leaf_indices.len() {
@@ -138,6 +145,24 @@ pub fn verify_leaf_proof(
 	p.verify(root, leaves_positions_and_data).map_err(crate::Error::MmrVerifyErr)
 }
 
+pub fn decode_mmr_leaves(encode_mmr_leaves: Vec<u8>) -> Result<Vec<MmrLeaf>, crate::Error> {
+	let encode_leaves: Vec<EncodableOpaqueLeaf> = Decode::decode(&mut &encode_mmr_leaves[..])
+		.map_err(|_| {
+			crate::Error::Other(
+				"decode raw mmr leaf data to Vec<EncodableOpaqueLeaf> failed".to_string(),
+			)
+		})?;
+
+	encode_leaves
+		.into_iter()
+		.map(|item| {
+			MmrLeaf::decode(&mut &item.0[..]).map_err(|_| {
+				crate::Error::Other("decode EncodableOpaqueLeaf to MmrLeaf failed".to_string())
+			})
+		})
+		.collect::<Result<Vec<MmrLeaf>, crate::Error>>()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -154,19 +179,13 @@ mod tests {
 		// }
 		let mmr_root = hex!("872ef8da39f2e6435164e8c366d1aaac59f61ccbf0127a377d732951a4846d32");
 		let  encoded_mmr_leaf = hex!("04c50100b102000094f7832b5f6159d61760c44a1bbdc19effedfa1c3e2efca53b2a00c02efec2aa450000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
-		let encode_leaves: Vec<EncodableOpaqueLeaf> =
-			Decode::decode(&mut &encoded_mmr_leaf[..]).unwrap();
-
-		let leaves = encode_leaves
-			.into_iter()
-			.map(|item| MmrLeaf::decode(&mut &item.0[..]).unwrap())
-			.collect::<Vec<_>>();
+		let leaves = decode_mmr_leaves(encoded_mmr_leaf.to_vec()).unwrap();
 
 		println!("leaves: {leaves:?}");
 
 		let encode_leaves_proof = hex!("04b102000000000000b3020000000000001800904dd683c2bf9b7d725c68b8a98de795db9df89c405fec2eccfea9f9762458f074eab9ecf2ac8c168e088b36b7eec0bbe72ba201a09f2f4f836fafc378435fa02bba42abb637dddef7e7ae10849cdafe61b8fbede0d90768481feeec0fda5cc29de7e36b51b90407b0e04726d2a1c0ba7a9049aa4f24d93f0875bca4252a9e9804e434f2d46654869ec591a68f203d81b7a924596a57d740f510899955bf46f4bf4a1bfea4c1ed264051d7078b34438c29c898d990c200a84113080b57e908");
-		let mmr_proof = MmrLeafProof::decode(&mut &encode_leaves_proof[..]).unwrap();
-		println!("mmr_proof: {mmr_proof:?}");
+		let mmr_leaves_proof = MmrLeavesProof::try_from(encode_leaves_proof.to_vec()).unwrap();
+		println!("mmr leaves proof : {mmr_leaves_proof:?}");
 
 		let  encoded_mmr_leaf = hex!("04c50100b102000094f7832b5f6159d61760c44a1bbdc19effedfa1c3e2efca53b2a00c02efec2aa450000000000000002000000697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce4020000000000000000000000000000000000000000000000000000000000000000");
 		let encode_leaves: Vec<EncodableOpaqueLeaf> =
@@ -175,7 +194,7 @@ mod tests {
 			.into_iter()
 			.map(|leaf| Keccak256::hash(&leaf.0))
 			.collect::<Vec<Hash>>();
-		let ret = verify_leaf_proof(mmr_root, hash_leaves, mmr_proof).unwrap();
+		let ret = verify_leaf_proof(mmr_root, hash_leaves, mmr_leaves_proof).unwrap();
 		assert!(ret);
 		println!("verify leaf proof successful!");
 	}
@@ -202,7 +221,7 @@ mod tests {
 		let root: Hash = hex!("3e81e73a77ddf45c0252bba8d1195d1076003d8387df373a46a3a559bc06acca");
 
 		let proofs = vec![
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![0],
 				leaf_count: 15,
 				items: vec![
@@ -212,7 +231,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![1],
 				leaf_count: 15,
 				items: vec![
@@ -222,7 +241,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![2],
 				leaf_count: 15,
 				items: vec![
@@ -232,7 +251,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![3],
 				leaf_count: 15,
 				items: vec![
@@ -242,7 +261,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![4],
 				leaf_count: 15,
 				items: vec![
@@ -252,7 +271,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![5],
 				leaf_count: 15,
 				items: vec![
@@ -262,7 +281,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![6],
 				leaf_count: 15,
 				items: vec![
@@ -272,7 +291,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![7],
 				leaf_count: 15,
 				items: vec![
@@ -282,7 +301,7 @@ mod tests {
 					hex!("de783edd9fe65db4ce28c56687da424218086b4948185bdd9f685a42506e3ba2"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![8],
 				leaf_count: 15,
 				items: vec![
@@ -292,7 +311,7 @@ mod tests {
 					hex!("24a44d3d08fbb13a1902e9fa3995456e9a141e0960a2f59725e65a37d474f2c0"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![9],
 				leaf_count: 15,
 				items: vec![
@@ -302,7 +321,7 @@ mod tests {
 					hex!("24a44d3d08fbb13a1902e9fa3995456e9a141e0960a2f59725e65a37d474f2c0"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![10],
 				leaf_count: 15,
 				items: vec![
@@ -312,7 +331,7 @@ mod tests {
 					hex!("24a44d3d08fbb13a1902e9fa3995456e9a141e0960a2f59725e65a37d474f2c0"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![11],
 				leaf_count: 15,
 				items: vec![
@@ -322,7 +341,7 @@ mod tests {
 					hex!("24a44d3d08fbb13a1902e9fa3995456e9a141e0960a2f59725e65a37d474f2c0"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![12],
 				leaf_count: 15,
 				items: vec![
@@ -332,7 +351,7 @@ mod tests {
 					hex!("c43faffd065ac4fc5bc432ad45c13de341b233dcc55afe99ac05eef2fbb8a583"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![13],
 				leaf_count: 15,
 				items: vec![
@@ -342,7 +361,7 @@ mod tests {
 					hex!("c43faffd065ac4fc5bc432ad45c13de341b233dcc55afe99ac05eef2fbb8a583"),
 				],
 			},
-			MmrLeafProof {
+			MmrLeavesProof {
 				leaf_indices: vec![14],
 				leaf_count: 15,
 				items: vec![

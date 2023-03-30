@@ -17,7 +17,6 @@ use commitment::{
 };
 use hash_db::Hasher;
 use header::Header;
-use mmr::MmrLeaf;
 use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
 
 pub use binary_merkle_tree::MerkleProof;
@@ -171,8 +170,8 @@ impl LightClient {
 		&mut self,
 		versioned_finality_proof: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
-		mmr_leaf: &[u8],
-		mmr_proof: &[u8],
+		encode_mmr_leaves: &[u8],
+		encode_mmr_leaves_proof: &[u8],
 	) -> Result<(), Error> {
 		let VersionedFinalityProof::V1(signed_commitment) =
 			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
@@ -207,14 +206,19 @@ impl LightClient {
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
+
+		let mmr_proof = mmr::MmrLeavesProof::try_from(encode_mmr_leaves_proof.to_vec())?;
+
+		let encode_leaves: Vec<mmr::EncodableOpaqueLeaf> =
+			Decode::decode(&mut &encode_mmr_leaves[..]).map_err(|_| {
+				Error::Other("decode EncodableOpaqueLeaf vector failed".to_string())
+			})?;
+		let hash_leaves = encode_leaves
+			.into_iter()
+			.map(|leaf| Keccak256::hash(&leaf.0))
+			.collect::<Vec<Hash>>();
+
+		let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
@@ -222,9 +226,15 @@ impl LightClient {
 		// update the latest commitment, including mmr_root
 		self.latest_commitment = Some(commitment);
 
+		// get max mmr leaf by authority set id
+		let max_mmr_leaf_by_authority_set_id = mmr::decode_mmr_leaves(encode_mmr_leaves.to_vec())?
+			.into_iter()
+			.max_by(|x, y| x.beefy_next_authority_set.id.cmp(&y.beefy_next_authority_set.id))
+			.ok_or(Error::Other("cannt find max mmr leaf".to_string()))?;
+
 		// update validator_set
-		if mmr_leaf.beefy_next_authority_set.id > self.validator_set.id {
-			self.validator_set = mmr_leaf.beefy_next_authority_set;
+		if max_mmr_leaf_by_authority_set_id.beefy_next_authority_set.id > self.validator_set.id {
+			self.validator_set = max_mmr_leaf_by_authority_set_id.beefy_next_authority_set;
 		}
 
 		Ok(())
@@ -235,8 +245,8 @@ impl LightClient {
 		&mut self,
 		versioned_finality_proof: &[u8],
 		validator_proofs: &[ValidatorMerkleProof],
-		mmr_leaf: &[u8],
-		mmr_proof: &[u8],
+		encode_mmr_leaves: &[u8],
+		encode_mmr_leaves_proof: &[u8],
 	) -> Result<(), Error> {
 		let VersionedFinalityProof::V1(signed_commitment) =
 			VersionedFinalityProof::decode(&mut &versioned_finality_proof[..])
@@ -262,26 +272,36 @@ impl LightClient {
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
+
+		let mmr_proof = mmr::MmrLeavesProof::try_from(encode_mmr_leaves_proof.to_vec())?;
+
+		let encode_leaves: Vec<mmr::EncodableOpaqueLeaf> =
+			Decode::decode(&mut &encode_mmr_leaves[..]).map_err(|_| {
+				Error::Other("decode EncodableOpaqueLeaf vector failed".to_string())
+			})?;
+		let hash_leaves = encode_leaves
+			.into_iter()
+			.map(|leaf| Keccak256::hash(&leaf.0))
+			.collect::<Vec<Hash>>();
+
+		let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
 
 		let commitment_hash = signed_commitment.commitment.hash();
 
+		let max_mmr_leaf_by_authority_set_id = mmr::decode_mmr_leaves(encode_mmr_leaves.to_vec())?
+			.into_iter()
+			.max_by(|x, y| x.beefy_next_authority_set.id.cmp(&y.beefy_next_authority_set.id))
+			.ok_or(Error::Other("cannt find max mmr leaf".to_string()))?;
+
 		self.in_process_state = Some(InProcessState {
 			position: 0,
 			commitment_hash,
 			signed_commitment,
 			validator_proofs: validator_proofs.to_vec(),
-			validator_set: mmr_leaf.beefy_next_authority_set,
+			validator_set: max_mmr_leaf_by_authority_set_id.beefy_next_authority_set,
 		});
 
 		Ok(())
@@ -344,7 +364,7 @@ impl LightClient {
 		&self,
 		messages: &[u8],
 		header: &[u8],
-		mmr_leaf: &[u8],
+		encode_mmr_leaves: &[u8],
 		mmr_proof: &[u8],
 	) -> Result<(), Error> {
 		let header = Header::decode(&mut &header[..]).map_err(|_| Error::CantDecodeHeader)?;
@@ -362,20 +382,29 @@ impl LightClient {
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
-		let mmr_proof = mmr::MmrLeafProof::decode(&mut &mmr_proof[..])
-			.map_err(|_| Error::CantDecodeMmrProof)?;
-		let mmr_leaf: Vec<u8> =
-			Decode::decode(&mut &mmr_leaf[..]).map_err(|_| Error::CantDecodeMmrLeaf)?;
-		let mmr_leaf_hash = Keccak256::hash(&mmr_leaf[..]);
-		let mmr_leaf: MmrLeaf =
-			Decode::decode(&mut &*mmr_leaf).map_err(|_| Error::CantDecodeMmrLeaf)?;
+		let mmr_proof = mmr::MmrLeavesProof::try_from(mmr_proof.to_vec())?;
+
+		let encode_leaves: Vec<mmr::EncodableOpaqueLeaf> =
+			Decode::decode(&mut &encode_mmr_leaves[..]).map_err(|_| {
+				Error::Other("decode EncodableOpaqueLeaf vector failed".to_string())
+			})?;
+		let hash_leaves = encode_leaves
+			.into_iter()
+			.map(|leaf| Keccak256::hash(&leaf.0))
+			.collect::<Vec<Hash>>();
+
+		let max_mmr_leaf_by_authority_set_id = mmr::decode_mmr_leaves(encode_mmr_leaves.to_vec())?
+			.into_iter()
+			.max_by(|x, y| x.beefy_next_authority_set.id.cmp(&y.beefy_next_authority_set.id))
+			.ok_or(Error::Other("cannt find max mmr leaf".to_string()))?;
 
 		let header_hash = header.hash();
-		if header_hash != mmr_leaf.parent_number_and_hash.1 {
+		// todo by davirian maybe have error
+		if header_hash != max_mmr_leaf_by_authority_set_id.parent_number_and_hash.1 {
 			return Err(Error::HeaderHashNotMatch)
 		}
 
-		let result = mmr::verify_leaf_proof(mmr_root, vec![mmr_leaf_hash], mmr_proof)?;
+		let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
 		if !result {
 			return Err(Error::InvalidMmrLeafProof)
 		}
