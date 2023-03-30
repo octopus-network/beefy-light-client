@@ -4,9 +4,8 @@ use beefy_light_client::{
 	header::{Digest, Header},
 	keccak256::Keccak256,
 	mmr::{MmrLeaf, MmrLeavesProof},
-	new,
 	validator_set::BeefyNextAuthoritySet,
-	ValidatorMerkleProof,
+	LightClient, ValidatorMerkleProof,
 };
 use binary_merkle_tree::{merkle_proof, merkle_root};
 use codec::{Decode, Encode};
@@ -25,7 +24,7 @@ fn update_state_works() {
 		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
 	];
 
-	let mut lc = new(public_keys);
+	let mut lc = LightClient::new(public_keys);
 	println!("light client: {:?}", lc);
 
 	let public_keys_without_no_prefix = vec![
@@ -162,7 +161,7 @@ fn verify_solochain_messages_works() {
 		"0x03bc9d0ca094bd5b8b3225d7651eac5d18c1c04bf8ae8f8b263eebca4e1410ed0c".to_string(), // Dave
 	];
 
-	let mut lc = new(public_keys);
+	let mut lc = LightClient::new(public_keys);
 
 	// 2022-10-03 15:41:38 🥩 Round #33 concluded, finality_proof: V1(SignedCommitment { commitment: Commitment { payload: Payload([([109, 104], [89, 203, 81, 61, 201, 8, 173, 192, 75, 218, 141, 102, 24, 16, 0, 229, 194, 127, 78, 95, 3, 239, 246, 7, 204, 181, 168, 117, 120, 96, 128, 5])]), block_number: 33, validator_set_id: 0 }, signatures: [None, Some(Signature(c56be180c4efef50b220ddd47365db65031f01f72f88bd77864f281f9e290ecf0d99580fcd197d2137d06c6601fefff77f4532c11a3e7f6cfe334e902167b6fb00)), Some(Signature(d41d48f2af7bda217ee844c46d65dfc7075828051e1fb0dd873d2bdede25f22e30b1e5878282c2e500a646cff82eb93436db716b3025a4ace437d2bf79b00ac400)), Some(Signature(30153374e6d4cca8430d1c10ebdc58a0b66180b5a7ed1daca55de0bff09e7785534b6681a2410a82afa8ab02cad36928d2dd2f1162d542177f527204a8ce591c00)), Some(Signature(e6754323c95da8c584b4bb8216adec0f351fda339a50ae29031c623ed2db124875c7d75891de6450ff60ff8872c90fd9a5ba7cac4ebcc43a80f5ffe8062ba7e500))] }).
 	let versioned_finality_proof = hex!("01046d688059cb513dc908adc04bda8d66181000e5c27f4e5f03eff607ccb5a8757860800521000000000000000000000004b805000000109798d407632bb5c9078d8c442c5885ce20fb13b519092038335df7c3d913e3a7509836506f9aac28013bd45e197fd1adbb1843fb62957719ca499e7a499eac2900d41d48f2af7bda217ee844c46d65dfc7075828051e1fb0dd873d2bdede25f22e30b1e5878282c2e500a646cff82eb93436db716b3025a4ace437d2bf79b00ac40030153374e6d4cca8430d1c10ebdc58a0b66180b5a7ed1daca55de0bff09e7785534b6681a2410a82afa8ab02cad36928d2dd2f1162d542177f527204a8ce591c00e6754323c95da8c584b4bb8216adec0f351fda339a50ae29031c623ed2db124875c7d75891de6450ff60ff8872c90fd9a5ba7cac4ebcc43a80f5ffe8062ba7e500");
@@ -287,7 +286,7 @@ fn maximum_validators_test() {
 	}
 	let encoded_versioned_finality_proof = VersionedFinalityProof::V1(signed_commitment).encode();
 
-	let mut lc = new(vec!["0x00".to_string()]);
+	let mut lc = LightClient::new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
@@ -378,7 +377,7 @@ fn update_state_in_multiple_steps() {
 	}
 	let encoded_versioned_finality_proof = VersionedFinalityProof::V1(signed_commitment).encode();
 
-	let mut lc = new(vec!["0x00".to_string()]);
+	let mut lc = LightClient::new(vec!["0x00".to_string()]);
 	lc.validator_set = BeefyNextAuthoritySet {
 		id: 0,
 		len: initial_public_keys.len() as u32,
