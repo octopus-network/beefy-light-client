@@ -1,7 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use hash_db::Hasher;
 
-use beefy_merkle_tree::{Hash, Keccak256};
+use crate::{keccak256::Keccak256, Hash};
 
 // Get the value of the bit at the given 'index' in 'n'.
 // index should be validated beforehand to make sure it is less than 64
