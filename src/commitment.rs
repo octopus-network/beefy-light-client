@@ -144,6 +144,7 @@ impl cmp::Ord for Commitment {
 		self.validator_set_id
 			.cmp(&other.validator_set_id)
 			.then_with(|| self.block_number.cmp(&other.block_number))
+			.then_with(|| self.payload.cmp(&other.payload))
 	}
 }
 
