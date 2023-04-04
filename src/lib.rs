@@ -195,11 +195,16 @@ impl LightClient {
 			.map_err(|_| Error::InvalidVersionedFinalityProof)
 	}
 
-	fn decode_authority_set_proof(authority_set_proof: &[Vec<u8>]) -> Vec<ValidatorMerkleProof> {
+	fn decode_authority_set_proof(
+		authority_set_proof: &[Vec<u8>],
+	) -> Result<Vec<ValidatorMerkleProof>, Error> {
 		authority_set_proof
 			.iter()
-			.map(|data| ValidatorMerkleProof::decode(&mut &data[..]).unwrap_or_default())
-			.collect()
+			.map(|data| {
+				ValidatorMerkleProof::decode(&mut &data[..])
+					.map_err(|_| Error::InvalidValidatorProof)
+			})
+			.collect::<Result<Vec<ValidatorMerkleProof>, Error>>()
 	}
 
 	fn decode_mmr_leaves_and_proof(
@@ -256,7 +261,7 @@ impl LightClient {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let commitment_hash = commitment.hash();
 
-		let validator_set_proof = LightClient::decode_authority_set_proof(authority_set_proof);
+		let validator_set_proof = LightClient::decode_authority_set_proof(authority_set_proof)?;
 
 		LightClient::verify_commitment_signatures(
 			&commitment_hash,
@@ -336,7 +341,7 @@ impl LightClient {
 
 		let commitment_hash = signed_commitment.commitment.hash();
 
-		let validator_set_proof = LightClient::decode_authority_set_proof(authority_set_proof);
+		let validator_set_proof = LightClient::decode_authority_set_proof(authority_set_proof)?;
 
 		let max_mmr_leaf_by_authority_set_id =
 			LightClient::max_mmr_leaf_by_authority_set_id(mmr_leaves)?;
