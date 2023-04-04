@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(clippy::unnecessary_cast)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -17,11 +16,12 @@ use commitment::{
 };
 use hash_db::Hasher;
 use header::Header;
-use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
+use validator_set::BeefyNextAuthoritySet;
 
 pub use binary_merkle_tree::MerkleProof;
 
 pub mod commitment;
+pub mod errors;
 pub mod header;
 pub mod keccak256;
 pub mod mmr;
@@ -30,72 +30,12 @@ pub mod validator_set;
 
 use crate::keccak256::Keccak256;
 pub use commitment::BeefyPayloadId;
+use errors::Error;
 
 /// Supported hashing output size.
 ///
 /// The size is restricted to 32 bytes to allow for a more optimised implementation.
 pub type Hash = [u8; 32];
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-	/// [Commitment] can't be imported, cause it's signed by either past or future validator set.
-	InvalidValidatorSetId { expected: ValidatorSetId, got: ValidatorSetId },
-	/// [Commitment] can't be imported, cause it's a set transition block and the proof is missing.
-	InvalidValidatorProof,
-	/// There are too many signatures in the commitment - more than validators.
-	InvalidNumberOfSignatures {
-		/// Number of validators in the set.
-		expected: usize,
-		/// Numbers of signatures in the commitment.
-		got: usize,
-	},
-	/// [SignedCommitment] doesn't have enough valid signatures.
-	NotEnoughValidSignatures { expected: usize, got: usize, valid: Option<usize> },
-	/// Next validator set has not been provided by any of the previous commitments.
-	MissingNextValidatorSetData,
-	/// Couldn't verify the proof against MMR root of the latest commitment.
-	InvalidMmrProof,
-	///
-	InvalidSignature,
-	///
-	InvalidMessage,
-	///
-	InvalidVersionedFinalityProof,
-	///
-	InvalidValidatorMerkleProof,
-	///
-	InvalidCommitmentPayload,
-	///
-	InvalidRecoveryId,
-	///
-	WrongSignature,
-	///
-	InvalidMmrLeafProof,
-	///
-	DigestNotFound,
-	///
-	DigestNotMatch,
-	///
-	HeaderHashNotMatch,
-	///
-	CantDecodeHeader,
-	///
-	CantDecodeMmrLeaf,
-	///
-	CantDecodeMmrProof,
-	///
-	MissingLatestCommitment,
-	///
-	CommitmentAlreadyUpdated,
-	///
-	ValidatorNotFound,
-	///
-	MissingInProcessState,
-	///
-	MmrVerifyErr(mmr_lib::Error),
-	/// other
-	Other(String),
-}
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub fn beefy_ecdsa_to_ethereum(compressed_key: &[u8]) -> Vec<u8> {
@@ -237,8 +177,8 @@ impl LightClient {
 		&mut self,
 		versioned_finality_proof: &[u8],
 		authority_set_proof: &[Vec<u8>],
-		mmr_leaves: &[u8], // TODO: make it optional
-		mmr_proof: &[u8],  // TODO: make it optional
+		mmr_leaves: Option<&[u8]>,
+		mmr_proof: Option<&[u8]>,
 	) -> Result<(), Error> {
 		let VersionedFinalityProof::V1(signed_commitment) =
 			LightClient::decode_versioned_finality_proof(versioned_finality_proof)?;
@@ -271,29 +211,33 @@ impl LightClient {
 			0,
 			signatures.len(),
 		)?;
+
 		let mmr_root: [u8; 32] = commitment
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
 
-		let (hash_leaves, mmr_proof) =
-			LightClient::decode_mmr_leaves_and_proof(mmr_leaves, mmr_proof)?;
+		if let (Some(mmr_leaves), Some(mmr_proof)) = (mmr_leaves, mmr_proof) {
+			let (hash_leaves, mmr_proof) =
+				LightClient::decode_mmr_leaves_and_proof(mmr_leaves, mmr_proof)?;
 
-		let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
-		if !result {
-			return Err(Error::InvalidMmrLeafProof)
-		}
+			let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
+			if !result {
+				return Err(Error::InvalidMmrLeafProof)
+			}
 
-		// update the latest commitment, including mmr_root
-		self.latest_commitment = Some(commitment);
+			// update the latest commitment, including mmr_root
+			self.latest_commitment = Some(commitment);
 
-		// get max mmr leaf by authority set id
-		let max_mmr_leaf_by_authority_set_id =
-			LightClient::max_mmr_leaf_by_authority_set_id(mmr_leaves)?;
+			// get max mmr leaf by authority set id
+			let max_mmr_leaf_by_authority_set_id =
+				LightClient::max_mmr_leaf_by_authority_set_id(mmr_leaves)?;
 
-		// update validator_set
-		if max_mmr_leaf_by_authority_set_id.beefy_next_authority_set.id > self.validator_set.id {
-			self.validator_set = max_mmr_leaf_by_authority_set_id.beefy_next_authority_set;
+			// update validator_set
+			if max_mmr_leaf_by_authority_set_id.beefy_next_authority_set.id > self.validator_set.id
+			{
+				self.validator_set = max_mmr_leaf_by_authority_set_id.beefy_next_authority_set;
+			}
 		}
 
 		Ok(())
