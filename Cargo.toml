@@ -12,6 +12,7 @@ binary-merkle-tree = { git = "https://github.com/paritytech/substrate.git", bran
 blake2-rfc = { version = "0.2.18", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"] }
+displaydoc = { version = "0.2", default-features = false }
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 hash-db = { version = "0.16.0", default-features = false }
@@ -34,6 +35,7 @@ std = [
 	"libsecp256k1/std",
 	"mmr-lib/std",
 	"borsh/std",
+	"displaydoc/std",
 	"hash256-std-hasher/std",
 	"hash-db/std",
 	"sha3/std",
