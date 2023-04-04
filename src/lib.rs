@@ -16,7 +16,7 @@ use commitment::{
 };
 use hash_db::Hasher;
 use header::Header;
-use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
+use validator_set::BeefyNextAuthoritySet;
 
 pub use binary_merkle_tree::MerkleProof;
 
@@ -177,8 +177,8 @@ impl LightClient {
 		&mut self,
 		versioned_finality_proof: &[u8],
 		authority_set_proof: &[Vec<u8>],
-		mmr_leaves: &[u8], // TODO: make it optional
-		mmr_proof: &[u8],  // TODO: make it optional
+		mmr_leaves: Option<&[u8]>,
+		mmr_proof: Option<&[u8]>,
 	) -> Result<(), Error> {
 		let VersionedFinalityProof::V1(signed_commitment) =
 			LightClient::decode_versioned_finality_proof(versioned_finality_proof)?;
@@ -211,29 +211,33 @@ impl LightClient {
 			0,
 			signatures.len(),
 		)?;
+
 		let mmr_root: [u8; 32] = commitment
 			.payload
 			.get_decoded(&MMR_ROOT_ID)
 			.ok_or(Error::InvalidCommitmentPayload)?;
 
-		let (hash_leaves, mmr_proof) =
-			LightClient::decode_mmr_leaves_and_proof(mmr_leaves, mmr_proof)?;
+		if let (Some(mmr_leaves), Some(mmr_proof)) = (mmr_leaves, mmr_proof) {
+			let (hash_leaves, mmr_proof) =
+				LightClient::decode_mmr_leaves_and_proof(mmr_leaves, mmr_proof)?;
 
-		let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
-		if !result {
-			return Err(Error::InvalidMmrLeafProof)
-		}
+			let result = mmr::verify_leaf_proof(mmr_root, hash_leaves, mmr_proof)?;
+			if !result {
+				return Err(Error::InvalidMmrLeafProof)
+			}
 
-		// update the latest commitment, including mmr_root
-		self.latest_commitment = Some(commitment);
+			// update the latest commitment, including mmr_root
+			self.latest_commitment = Some(commitment);
 
-		// get max mmr leaf by authority set id
-		let max_mmr_leaf_by_authority_set_id =
-			LightClient::max_mmr_leaf_by_authority_set_id(mmr_leaves)?;
+			// get max mmr leaf by authority set id
+			let max_mmr_leaf_by_authority_set_id =
+				LightClient::max_mmr_leaf_by_authority_set_id(mmr_leaves)?;
 
-		// update validator_set
-		if max_mmr_leaf_by_authority_set_id.beefy_next_authority_set.id > self.validator_set.id {
-			self.validator_set = max_mmr_leaf_by_authority_set_id.beefy_next_authority_set;
+			// update validator_set
+			if max_mmr_leaf_by_authority_set_id.beefy_next_authority_set.id > self.validator_set.id
+			{
+				self.validator_set = max_mmr_leaf_by_authority_set_id.beefy_next_authority_set;
+			}
 		}
 
 		Ok(())

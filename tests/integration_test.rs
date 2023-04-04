@@ -55,8 +55,8 @@ fn update_state_works() {
 		.update_state(
 			&encoded_versioned_finality_proof_1,
 			&encoded_authority_set_proof,
-			&encoded_mmr_leaves_1,
-			&encoded_mmr_proof_1,
+			Some(&encoded_mmr_leaves_1),
+			Some(&encoded_mmr_proof_1),
 		)
 		.is_ok());
 
@@ -75,8 +75,8 @@ fn update_state_works() {
 		.update_state(
 			&encoded_versioned_finality_proof_2,
 			&encoded_authority_set_proof,
-			&encoded_mmr_leaves_2,
-			&encoded_mmr_proof_2,
+			Some(&encoded_mmr_leaves_2),
+			Some(&encoded_mmr_proof_2),
 		)
 		.is_ok());
 }
@@ -178,8 +178,8 @@ fn maximum_validators_test() {
 		.update_state(
 			&encoded_versioned_finality_proof,
 			&authority_set_proof,
-			&encoded_mmr_leaves,
-			&encoded_mmr_proof,
+			Some(&encoded_mmr_leaves),
+			Some(&encoded_mmr_proof),
 		)
 		.is_ok());
 	println!("lc: {:?}", lc);
