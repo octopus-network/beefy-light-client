@@ -16,8 +16,7 @@ use commitment::{
 };
 use hash_db::Hasher;
 use header::Header;
-
-use validator_set::BeefyNextAuthoritySet;
+use validator_set::{BeefyNextAuthoritySet, ValidatorSetId};
 
 pub use binary_merkle_tree::MerkleProof;
 
