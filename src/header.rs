@@ -136,13 +136,13 @@ pub struct ChangesTrieConfiguration {
 #[repr(u32)]
 #[derive(Encode, Decode)]
 pub enum DigestItemType {
-	Other = 0,
-	ChangesTrieRoot = 2,
-	Consensus = 4,
-	Seal = 5,
-	PreRuntime = 6,
-	ChangesTrieSignal = 7,
-	RuntimeEnvironmentUpdated = 8,
+	Other = 0u32,
+	ChangesTrieRoot = 2u32,
+	Consensus = 4u32,
+	Seal = 5u32,
+	PreRuntime = 6u32,
+	ChangesTrieSignal = 7u32,
+	RuntimeEnvironmentUpdated = 8u32,
 }
 
 impl Encode for DigestItem {

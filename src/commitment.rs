@@ -230,11 +230,11 @@ impl CompactSignedCommitment {
 		let chunks = bits.chunks(CONTAINER_BIT_SIZE);
 		for chunk in chunks {
 			let mut iter = chunk.iter().copied();
-			let mut v = iter.next().unwrap() as u8;
+			let mut v = iter.next().unwrap(); // todo(davirian) need remove unwrap()
 
 			for bit in iter {
 				v <<= 1;
-				v |= bit as u8;
+				v |= bit;
 			}
 
 			signatures_from.push(v);
