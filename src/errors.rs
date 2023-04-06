@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+
 use crate::validator_set::ValidatorSetId;
 use displaydoc::Display;
 
