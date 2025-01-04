@@ -10,7 +10,7 @@ use hash_db::Hasher;
 use std::cmp;
 
 use crate::{keccak256::Keccak256, Hash};
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh_derive::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use core::convert::TryInto;
 use scale_info::TypeInfo;
